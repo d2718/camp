@@ -88,7 +88,7 @@ pub enum AuthResult {
     InvalidKey,
 }
 
-struct Db {
+pub struct Db {
     connection_string: String,
     key_chars: Vec<char>,
     key_length: usize,
@@ -120,6 +120,8 @@ impl Db {
     pub fn set_key_length(&mut self, new_length: usize) { self.key_length = new_length; }
     pub fn set_key_life(&mut self, seconds: u64) { self.key_life = format!("{} seconds", &seconds); }
     
+    /// Generate a new authentication key based on the current values of
+    /// `self.key_chars` and `self.key_length`.
     fn generate_key(&self) -> String {
         // self.key_chars should never be of length 0.
         let dist = distributions::Slice::new(&self.key_chars).unwrap();
@@ -172,6 +174,12 @@ impl Db {
             .map_err(|e| format!("Error committing transaction: {}", &e).into())
     }
     
+    /**
+    Add the specified users to the database.
+    
+    Will fail with an error if any of the provided `unames` belong to extant
+    users.
+    */
     pub async fn add_users(
         &self,
         unames: &[&str],
@@ -342,6 +350,10 @@ impl Db {
         }
     }
     
+    /**
+    Check whether the provided `(uname, password, salt)` combination is valid,
+    and issue a new key on success.
+    */
     pub async fn check_password_and_issue_key(
         &self,
         uname: &str,
@@ -427,6 +439,7 @@ impl Db {
         Ok(AuthResult::Ok)
     }
     
+    /// Delete any keys that have been unused for longer than `self.key_life`.
     async fn cull_old_keys(&self) -> Result<(), DbError> {
         log::trace!("Db::cull_old_keys() called.");
         
@@ -477,7 +490,7 @@ mod tests {
     static PASSWORDS: &[&str] = &["booga", "purple", "aqua"];
     static SALTS: &[&str] = &["asdf", "hjkl", "qwer"];
     
-    static TEST_CONNECTION: &str = "host=localhost user=camp_test password='camp_test' dbname=camp_test";
+    static TEST_CONNECTION: &str = "host=localhost user=camp_test password='camp_test' dbname=camp_auth_test";
     
 
     

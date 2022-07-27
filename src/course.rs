@@ -23,6 +23,7 @@ level = 12.1
 7,          8,          Chapter 7,  Applications of Trigonometry
 ```
 */
+use std::cmp::Ordering;
 use std::io::{BufRead, BufReader, Cursor, Read};
 
 use serde::Deserialize;
@@ -144,21 +145,25 @@ fn read_toml_csv_split<R: Read>(r: R)
     }
 }
 
-struct Custom {
-    id: i64,
-    uname: String,
-    title: String,
-    weight: f32,
+pub struct Custom {
+    pub id: i64,
+    pub uname: String,
+    pub title: String,
+    pub weight: f32,
 }
 
 #[derive(Debug, Clone)]
-struct Chapter {
-    id: i64,
-    course_id: i64,
-    seq: usize,
-    title: String,
-    subject: Option<String>,
-    weight: f32,
+pub struct Chapter {
+    pub id: i64,
+    pub course_id: i64,
+    /// The number of the chapter in the text.
+    ///
+    /// This really should be a `usize`, but it has to map to a two-byte
+    /// integer in the database.
+    pub seq: i16,
+    pub title: String,
+    pub subject: Option<String>,
+    pub weight: f32,
 }
 
 impl Chapter {
@@ -167,9 +172,9 @@ impl Chapter {
     ) -> Result<Chapter, String> {
         log::trace!("Chapter::from_csv_line( {:?} ) called.", line);
         
-        let seq: usize = match line.get(0) {
+        let seq: i16 = match line.get(0) {
             None => { return Err("line must start with chapter value".to_owned()) }
-            Some(text) => text.parse::<usize>()
+            Some(text) => text.parse::<i16>()
                 .map_err(|e| format!(
                     "{:?} is not a valid chapter number: {}. (Hint: try a non-negative integer.)",
                     &text, &e
@@ -212,7 +217,7 @@ struct CourseHeader {
 }
 
 #[derive(Debug)]
-struct Course {
+pub struct Course {
     pub id: i64,
     pub sym: String,
     pub book: String,
@@ -294,9 +299,20 @@ impl Course {
         };
         Ok(c)
     }
+
+    pub fn new(id: i64, sym: String, book: String, title: String, level: f32) -> Self {
+        Self { id, sym, book, title, level, chapters: Vec::new() }
+    }
+
+    /// Builder-pattern method to add `Chapter`s after the fact.
+    pub fn with_chapters(self, chapters: Vec<Chapter>) -> Self {
+        let mut new = self;
+        new.chapters = chapters;
+        new
+    }
     
     /// Return a reference to Chapter `n` in the course, if it exists.
-    pub fn chapter(&self, n: usize) -> Option<&Chapter> {
+    pub fn chapter(&self, n: i16) -> Option<&Chapter> {
         // Right now this is a linear search. This may change in the future
         // if the data structure holding `Chapter`s becomes something other
         // than a `Vec`, but I'm not too woried about performance here.
@@ -304,6 +320,11 @@ impl Course {
             if ch.seq == n { return Some(ch); }
         }
         None
+    }
+
+    /// Return an iterator over all the `&Chapter`s.
+    pub fn all_chapters(&self) -> impl Iterator<Item=&Chapter> {
+        self.chapters.iter()
     }
 }
 
