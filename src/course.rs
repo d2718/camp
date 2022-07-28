@@ -192,7 +192,13 @@ impl Chapter {
         
         let title: String = match line.get(2) {
             None => format!("Chapter {}", &seq),
-            Some(text) => text.to_owned(),
+            Some(text) => {
+                if text.len() == 0 {
+                    format!("Chapter {}", &seq)
+                } else {
+                    text.to_owned()
+                }
+            },
         };
         
         let subject: Option<String> = line.get(3).map(|s| s.to_owned());

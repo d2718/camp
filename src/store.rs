@@ -37,6 +37,7 @@ TODO:
   * Better `.map_err()` annotations.
 
 */
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use tokio_postgres::{Client, NoTls, Row, Statement, types::Type};
@@ -115,10 +116,10 @@ impl From<String> for DbError {
     fn from(s: String) -> DbError { DbError(s) }
 }
 
-fn chapter_from_row(course_id: i64, row: &Row) -> Result<Chapter, DbError> {
+fn chapter_from_row(row: &Row) -> Result<Chapter, DbError> {
     Ok(Chapter {
         id: row.try_get("id")?,
-        course_id,
+        course_id: row.try_get("course")?,
         seq: row.try_get("sequence")?,
         title: row.try_get("title")?,
         subject: match row.try_get("subject") {
@@ -127,6 +128,16 @@ fn chapter_from_row(course_id: i64, row: &Row) -> Result<Chapter, DbError> {
         },
         weight: row.try_get("weight")?,
     })
+}
+
+fn course_from_row(row: &Row) -> Result<Course, DbError> {
+    Ok(Course::new(
+        row.try_get("id")?,
+        row.try_get("sym")?,
+        row.try_get("book")?,
+        row.try_get("title")?,
+        row.try_get("level")?,
+    ))
 }
 
 pub struct Store {
@@ -362,7 +373,7 @@ impl Store {
         ).await?;
         let mut chapters: Vec<Chapter> = Vec::with_capacity(rows.len());
         for row in rows.iter() {
-            match chapter_from_row(crs.id, row) {
+            match chapter_from_row(row) {
                 Ok(ch) => { chapters.push(ch); },
                 Err(e) => {
                     return Err(
@@ -374,6 +385,34 @@ impl Store {
         }
 
         Ok(Some(crs.with_chapters(chapters)))
+    }
+
+    /// Return a HashMap of all courses in the database.
+    pub async fn get_courses(&self) -> Result<HashMap<i64, Course>, DbError> {
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+        
+        let course_rows = t.query("SELECT * FROM courses", &[]).await?;
+        let mut course_map: HashMap<i64, Course> = HashMap::with_capacity(course_rows.len());
+        let mut vec_map: HashMap<i64, Vec<Chapter>> = HashMap::with_capacity(course_rows.len());
+        for row in course_rows.iter() {
+            let crs = course_from_row(row)?;
+            vec_map.insert(crs.id, Vec::new());
+            course_map.insert(crs.id, crs);
+        }
+
+        let chapter_rows = t.query("SELECT * from chapters", &[]).await?;
+        for row in chapter_rows.iter() {
+            let ch = chapter_from_row(row)?;
+            vec_map.get_mut(&ch.course_id).unwrap().push(ch);
+        }
+
+        for (id, chaps) in vec_map.drain() {
+            let crs = course_map.remove(&id).unwrap();
+            course_map.insert(id, crs.with_chapters(chaps));
+        }
+
+        Ok(course_map)
     }
 }
 
@@ -468,6 +507,7 @@ mod tests {
 
         let db = Store::new(TEST_CONNECTION.to_owned());
         db.ensure_db_schema().await.unwrap();
+
         let (n_crs, n_chp) = db.insert_courses(&course_vec).await.unwrap();
         assert_eq!((n_crs, n_chp), (2, tot_chp));
 
@@ -476,6 +516,46 @@ mod tests {
         let new_cpc = db.get_course_by_sym("pc").await.unwrap().unwrap();
         assert!(same_courses(&course_vec[0], &new_cpc));
         assert!(!same_courses(&course_vec[1], &new_cpc));
+
+        db.nuke_database().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn get_all_courses() {
+        ensure_logging();
+
+        let course_files: &[&str] = &[
+            "test/good_course_0.mix",
+            // "test/good_course_1.mix", // same as test/good_course_0.mix
+            "test/good_course_2.mix",
+            "test/good_course_3.mix",
+        ];
+
+        let loaded_courses: Vec<Course> = course_files.iter()
+            .map(|fname| Course::from_reader(
+                fs::File::open(fname).unwrap()
+            ).unwrap())
+            .collect();
+        
+        let db = Store::new(TEST_CONNECTION.to_owned());
+        db.ensure_db_schema().await.unwrap();
+
+        let (n_crs, n_chap) = db.insert_courses(&loaded_courses).await.unwrap();
+        log::trace!("Loaded {} courses, {} chapters.", &n_crs, &n_chap);
+
+        let course_map = db.get_courses().await.unwrap();
+        let mut sym_map: HashMap<String, i64> = HashMap::with_capacity(course_map.len());
+        for (id, crs) in course_map.iter() {
+            sym_map.insert(crs.sym.to_owned(), *id);
+        }
+
+        for lcrs in loaded_courses.iter() {
+            assert!(same_courses(
+                lcrs,
+                course_map.get(sym_map.get(&lcrs.sym).unwrap()).unwrap()
+            ));
+        }
 
         db.nuke_database().await.unwrap();
     }
