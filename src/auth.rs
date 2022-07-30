@@ -492,8 +492,6 @@ mod tests {
     
     static TEST_CONNECTION: &str = "host=localhost user=camp_test password='camp_test' dbname=camp_auth_test";
     
-
-    
     #[tokio::test]
     #[ignore]
     #[serial]

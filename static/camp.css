@@ -1,0 +1,24 @@
+body {
+    margin: 0; border: 0; padding: 0;
+    background-color: #ccc;
+    color: #246;
+    font-family: serif;
+}
+
+h1 { text-align: center; }
+
+form#login {
+    display: grid;
+/*     width: 40ex;
+    height: 5em */
+    margin-left: auto; margin-right: auto;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+}
+
+form#login > * {
+    align-self: center;
+    margin: 0.5ex;
+}
+form#login > *:nth-child(odd) { justify-self: end; }
+form#login > *:nth-child(even) { justify-self: start; }

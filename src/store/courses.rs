@@ -1,7 +1,42 @@
-/*!
+/*
 `Store` methods et. al. for dealing with `Course` manipulation.
+
+This set is to store information about the courses.
+
+```sql
+
+CREATE TABLE courses (
+    id    SERIAL PRIMARY KEY,
+    sym   TEXT UNIQUE NOT NULL,
+    book  TEXT,
+    title TEXT NOT NULL,
+    level REAL
+);
+
+CREATE TABLE chapters (
+    id       SERIAL PRIMARY KEY,
+    course   INTEGER REFERENCES courses(id),
+    sequence SMALLINT,
+    title    TEXT,      /* NULL should give default-generated title */
+    subject  TEXT,      /* NULL should just be a blank */
+    weight   REAL       /* NULL should give default value of 1.0 */
+);
+
+CREATE TABLE custom_chapters (
+    id    BIGSERIAL PRIMARY KEY,
+    uname REFERENCES user(uname),   /* username of creator */
+    title TEXT NOT NULL,
+    weight REAL     /* NULL should give default value of 1.0 */
+);
+```
 */
+use std::collections::HashMap;
+use std::fmt::Write;
+
+use tokio_postgres::{Row, types::Type};
+
 use super::{Store, DbError};
+use crate::course::{Course, Chapter};
 
 fn chapter_from_row(row: &Row) -> Result<Chapter, DbError> {
     Ok(Chapter {
@@ -189,10 +224,14 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::ensure_logging;
+
+    use std::fs::File;
 
     use float_cmp::approx_eq;
     use serial_test::serial;
+
+    use crate::tests::ensure_logging;
+    use crate::store::tests::TEST_CONNECTION;
 
     fn same_chapters(a: &Chapter, b: &Chapter) -> bool {
         if a.seq != b.seq { return false; }
@@ -221,10 +260,10 @@ mod tests {
         ensure_logging();
 
         let cpc = Course::from_reader(
-            fs::File::open("test/good_course_0.mix").unwrap()
+            File::open("test/good_course_0.mix").unwrap()
         ).unwrap();
         let hdg = Course::from_reader(
-            fs::File::open("test/good_course_2.mix").unwrap()
+            File::open("test/good_course_2.mix").unwrap()
         ).unwrap();
         let tot_chp = cpc.all_chapters().count() + hdg.all_chapters().count();
 
@@ -259,7 +298,7 @@ mod tests {
 
         let loaded_courses: Vec<Course> = course_files.iter()
             .map(|fname| Course::from_reader(
-                fs::File::open(fname).unwrap()
+                File::open(fname).unwrap()
             ).unwrap())
             .collect();
         

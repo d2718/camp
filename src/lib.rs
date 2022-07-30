@@ -2,10 +2,12 @@
 #![allow(unused_imports)]
 
 pub mod auth;
+pub mod config;
 pub mod course;
 pub mod store;
+pub mod user;
 
-fn log_level_from_env() -> simplelog::LevelFilter {
+pub fn log_level_from_env() -> simplelog::LevelFilter {
     use simplelog::LevelFilter;
 
     let mut level_string = match std::env::var("LOG_LEVEL") {

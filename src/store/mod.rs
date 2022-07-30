@@ -1,38 +1,6 @@
 /*!
 Database interaction module.
 
-The Postgres database to which this connects is meant to have the following
-sets of tables.
-
-This first set is to store information about the courses.
-
-```sql
-
-CREATE TABLE courses (
-    id    SERIAL PRIMARY KEY,
-    sym   TEXT UNIQUE NOT NULL,
-    book  TEXT,
-    title TEXT NOT NULL,
-    level REAL
-);
-
-CREATE TABLE chapters (
-    id       SERIAL PRIMARY KEY,
-    course   INTEGER REFERENCES courses(id),
-    sequence SMALLINT,
-    title    TEXT,      /* NULL should give default-generated title */
-    subject  TEXT,      /* NULL should just be a blank */
-    weight   REAL       /* NULL should give default value of 1.0 */
-);
-
-CREATE TABLE custom_chapters (
-    id    BIGSERIAL PRIMARY KEY,
-    uname REFERENCES user(uname),   /* username of creator */
-    title TEXT NOT NULL,
-    weight REAL     /* NULL should give default value of 1.0 */
-);
-```
-
 TODO:
   * Better `.map_err()` annotations.
 
@@ -44,6 +12,8 @@ use tokio_postgres::{Client, NoTls, Row, Statement, types::Type};
 use rand::{Rng, distributions};
 
 use crate::course::{Course, Chapter, Custom};
+mod courses;
+mod users;
 
 const DEFAULT_SALT_LENGTH: usize = 4;
 const DEFAULT_SALT_CHARS: &str =
@@ -86,6 +56,38 @@ static SCHEMA: &[(&str, &str, &str)] = &[
             weight  REAL    /* default should be 1.0 */
         )",
         "DROP TABLE custom_chapters",
+    ),
+
+    (
+        "SELECT FROM information_schema.tables WHERE table_name = 'users'",
+        "CREATE TABLE users (
+            uname TEXT PRIMARY KEY,
+            role  TEXT NOT NULL,
+            salt  TEXT,
+            email TEXT
+        )",
+        "DROP TABLE users",
+    ),
+
+    (
+        "SELECT FROM information_schema.tables WHERE table_name = 'teachers'",
+        "CREATE TABLE teachers (
+            uname TEXT UNIQUE REFERENCES users(uname),
+            name  TEXT
+        )",
+        "DROP TABLE teachers",
+    ),
+
+    (
+        "SELECT FROM information_schema.tables WHERE table_name = 'students'",
+        "CREATE TABLE students (
+            uname   TEXT REFERENCES users(uname),
+            last    TEXT,
+            rest    TEXT,
+            teacher TEXT REFERENCES teachers(uname),
+            parent  TEXT     /* parent email address */
+        )",
+        "DROP TABLE students",
     ),
 ];
 
@@ -259,7 +261,7 @@ mod tests {
     use float_cmp::approx_eq;
     use serial_test::serial;
 
-    static TEST_CONNECTION: &str = "host=localhost user=camp_test password='camp_test' dbname=camp_store_test";
+    pub static TEST_CONNECTION: &str = "host=localhost user=camp_test password='camp_test' dbname=camp_store_test";
 
     /**
     This function is for getting the database back in a blank slate state if
