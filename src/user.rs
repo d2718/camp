@@ -243,5 +243,12 @@ impl User {
 
 #[cfg(test)]
 mod tests {
-    
+    use super::*;
+
+    #[test]
+    fn students_from_csv() {
+        let f = std::fs::File::open("test/good_students_0.csv").unwrap();
+        let studs = Student::vec_from_csv_reader(f).unwrap();
+        log::trace!("Students:\n{:#?}", &studs);
+    }
 }
