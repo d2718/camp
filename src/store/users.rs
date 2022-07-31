@@ -33,8 +33,34 @@ use tokio_postgres::{Row, Transaction, types::{ToSql, Type}};
 use super::{Store, DbError};
 use crate::user::*;
 
+/**
+The `TeacherSidecar` struct is to hold the contents of records queried from
+the 'teachers' database table until they can be combined into a `Teacher`
+struct.
+*/
+#[derive(Debug)]
+struct TeacherSidecar {
+    uname: String,
+    name: String,
+}
+
+/**
+The `StudentSidecar` struct is to hold the contents of records queried from
+the 'students' database table until they can be combined into a `Student`
+struct.
+*/
+#[derive(Debug)]
+struct StudentSidecar {
+    uname: String,
+    last: String,
+    rest: String,
+    teacher: String,
+    parent: String,
+}
+
+/// Turn a row queried from the 'users' table in to a `BaseUser.
 fn base_user_from_row(row: &Row) -> Result<BaseUser, DbError> {
-    log::trace!("base_user_from_row( {:?} ) called", row);
+    log::trace!("base_user_from_row( {:?} ) called.", row);
 
     let role_str: &str = row.try_get("role")?;
     let bu = BaseUser {
@@ -48,10 +74,53 @@ fn base_user_from_row(row: &Row) -> Result<BaseUser, DbError> {
     Ok(bu)
 }
 
-/// Return the role of extant user `uname`, if he exists.
-///
-/// This function is used when inserting new users to ensure, mainly to
-/// ensure good error messaging when a username is already in use.
+/**
+Store the data from a row queried from the 'teachers' table in a
+`TeacherSidecar`.
+
+This should then be almost immediately combined with a `BaseUser` to
+become a `Teacher`.
+*/
+fn teacher_from_row(row: &Row) -> Result<TeacherSidecar, DbError> {
+    log::trace!("teacher_from_row( {:?} ) called.", row);
+
+    let t = TeacherSidecar {
+        uname: row.try_get("uname")?,
+        name: row.try_get("name")?,
+    };
+
+    log::trace!("    ...teacher_from_row() returning {:?}", &t);
+    Ok(t)
+}
+
+/**
+Store the data from a row queried from the 'students' table in a 
+`StudentSidecar`.
+
+This should them be almost immediately combined with a `BaseUser` to
+become a `Student`.
+*/
+fn student_from_row(row: &Row) -> Result<StudentSidecar, DbError> {
+    log::trace!("student_from_row( {:?} ) called.", row);
+
+    let s = StudentSidecar {
+        uname: row.try_get("uname")?,
+        last: row.try_get("last")?,
+        rest: row.try_get("rest")?,
+        teacher: row.try_get("teacher")?,
+        parent: row.try_get("parent")?,
+    };
+
+    log::trace!("    ...student_from_row() returning {:?}", &s);
+    Ok(s)
+}
+
+/**
+Return the role of extant user `uname`, if he exists.
+
+This function is used when inserting new users to mainly to ensure good error
+messaging when a username is already in use.
+*/
 async fn check_existing_user_role(
     t: &Transaction<'_>,
     uname: &str,
@@ -434,11 +503,12 @@ impl Store {
         Ok(n_stud_inserted as usize)
     }
 
-    pub async fn get_users(&self) -> Result<HashMap<String, BaseUser>, DbError> {
-        log::trace!("Store::get_users() called.");
+    async fn get_base_users(
+        t: &Transaction<'_>
+    ) -> Result<HashMap<String, BaseUser>, DbError> {
+        log::trace!("Store::get_base_users( &T ) called.");
 
-        let client = self.connect().await?;
-        let rows = client.query("SELECT * FROM users;", &[]).await?;
+        let rows = t.query("SELECT * FROM users", &[]).await?;
         let mut map: HashMap<String, BaseUser> = HashMap::with_capacity(rows.len());
 
         for row in rows.iter() {
@@ -447,6 +517,128 @@ impl Store {
         }
 
         Ok(map)
+    }
+
+    async fn get_teacher_sidecars(
+        t: &Transaction<'_>
+    ) -> Result<Vec<TeacherSidecar>, DbError> {
+        log::trace!("Store::get_teacher_sidecars( &T ) called.");
+
+        let rows = t.query("SELECT * FROM teachers", &[]).await?;
+        let mut teachers: Vec<TeacherSidecar> = Vec::with_capacity(rows.len());
+        for row in rows.iter() {
+            teachers.push(teacher_from_row(row)?);
+        }
+
+        log::trace!(
+            "    ...Store::get_teacher_sidecars() returns {} Teachers.",
+            &teachers.len()
+        );
+        Ok(teachers)
+    }
+
+    async fn get_student_sidecars(
+        t: &Transaction<'_>
+    ) -> Result<Vec<StudentSidecar>, DbError> {
+        log::trace!("Store::get_student_sidecars( &T ) called.");
+
+        let rows = t.query("SELECT * FROM students", &[]).await?;
+        let mut students: Vec<StudentSidecar> = Vec::with_capacity(rows.len());
+        for row in rows.iter() {
+            students.push(student_from_row(row)?);
+        }
+
+        log::trace!(
+            "    ...Store::get_student_sidecars() returns {} Students.",
+            &students.len()
+        );
+        Ok(students)
+    }
+
+    pub async fn get_users(&self) -> Result<HashMap<String, User>, DbError> {
+        log::trace!("Store::get_users() called.");
+
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+
+        let (base_res, teach_res, stud_res) = tokio::join!(
+            Store::get_base_users(&t),
+            Store::get_teacher_sidecars(&t),
+            Store::get_student_sidecars(&t),
+        );
+        t.commit().await?;
+
+        let (mut base_map, mut teach_vec, mut stud_vec) =
+            (base_res?, teach_res?, stud_res?);
+        let mut user_map: HashMap<String, User> =
+            HashMap::with_capacity(base_map.len());
+        
+        for t in teach_vec.drain(..) {
+            let base = base_map.remove(&t.uname)
+                .ok_or_else(|| {
+                    log::error!(
+                        "Teacher {:?} has no corresponding BaseUser in database.",
+                        &t.uname
+                    );
+
+                    format!(
+"Teacher with uname {:?} has no corresponding entry in the database 'users' table.
+This absolutely shouldn't be able to happen, but here we are.",
+                        &t.uname
+                    )
+                })?;
+            user_map.insert(base.uname.clone(), base.into_teacher(t.name));
+        }
+
+        for s in stud_vec.drain(..) {
+            let base = base_map.remove(&s.uname)
+                .ok_or_else(|| {
+                    log::error!(
+                        "Student {:?} has no corresponding BaseUser in database.",
+                        &s.uname
+                    );
+
+                    format!(
+"Student with uname {:?} has no corresponding entry in the database 'users' table.
+This absolutely shouldn't be able to happen, but here we are.",
+                        &s.uname
+                    )
+                })?;
+            user_map.insert(
+                base.uname.clone(),
+                base.into_student(
+                    s.last,
+                    s.rest,
+                    s.teacher,
+                    s.parent
+                )
+            );
+        }
+
+        for (_, base) in base_map.drain() {
+            let u: User = match base.role {
+                Role::Admin => base.into_admin(),
+                Role::Boss => base.into_boss(),
+                x @ _ => {
+                    log::error!(
+                        "BaseUser {:?} has role of {}, but no corresponding sidecar in the appropriate table.",
+                        &base.uname, &x
+                    );
+                    let estr = format!(
+"User {:?} has a record in the 'users' table with role {}, but no corresponding
+sidecar entry in the appropriate table for that role.
+This absolutely shouldn't be able to happen, but here we are.",
+                        &base.uname, &base.role
+                    );
+                    return Err(DbError(estr));
+                },
+            };
+
+            user_map.insert(u.uname().to_string(), u);
+        }
+
+        log::trace!("    ...Store::get_users() returns {} Users.", &user_map.len());
+        Ok(user_map)
     }
 }
 
@@ -458,6 +650,17 @@ mod tests {
 
     use crate::tests::ensure_logging;
     use crate::store::tests::TEST_CONNECTION;
+
+    fn same_students(a: &Student, b: &Student) -> bool {
+        if &a.base.uname != &b.base.uname { return false; }
+        if &a.base.role  != &b.base.role { return false; }
+        if &a.base.email != &b.base.email { return false; }
+        if &a.last       != &b.last { return false; }
+        if &a.rest       != &b.rest { return false; }
+        if &a.teacher    != &b.teacher { return false; }
+        if &a.parent     != &b.parent { return false; }
+        true
+    }
 
     static ADMINS: &[(&str, &str)] = &[
         ("admin", "thelma@camelotacademy.org"),
@@ -474,6 +677,13 @@ mod tests {
         ("jenny", "jenny@camelotacademy.org", "Ms Jenny"),
         ("irfan", "irfan@camelotacademy.org", "Mr Irfan"),
     ];
+
+    static STUDENTS_CSV: &str = 
+    "#uname, last, rest, email, parent, teacher
+    frog, Frog, Frederick, fred.frog@gmail.com, ferd.frog@gmail.com, berro
+    zack, Milk, Zachary, milktruck@gmail.com, handsome.dave@gmail.com, jenny
+    ghill, Hill, Griffin, g.wilder.hill@gmail.com, dan@camelotacademy.org, berro
+    edriver, Driver, Elaine E., ee.driver@gmail.com, arol.parker@gmail.com, irfan";
 
     #[tokio::test]
     #[serial]
@@ -493,13 +703,21 @@ mod tests {
             db.insert_teacher(uname, email, name).await.unwrap();
         }
 
+        let mut studs = Student::vec_from_csv_reader(
+            std::io::Cursor::new(STUDENTS_CSV.as_bytes())
+        ).unwrap();
+        assert_eq!(
+            db.insert_students(&studs).await.unwrap(),
+            studs.len()
+        );
+
         let mut umap = db.get_users().await.unwrap();
 
         for (uname, email) in ADMINS.iter() {
             let u = umap.remove(*uname).unwrap();
             assert_eq!(
                 (*uname, *email, Role::Admin),
-                (u.uname.as_str(), u.email.as_str(), u.role)
+                (u.uname(), u.email(), u.role())
             );
             db.delete_user(uname).await.unwrap();
         }
@@ -507,7 +725,7 @@ mod tests {
             let u = umap.remove(*uname).unwrap();
             assert_eq!(
                 (*uname, *email, Role::Boss),
-                (u.uname.as_str(), u.email.as_str(), u.role)
+                (u.uname(), u.email(), u.role())
             );
             db.delete_user(uname).await.unwrap();
         }
@@ -516,8 +734,20 @@ mod tests {
             let u = umap.remove(*uname).unwrap();
             assert_eq!(
                 (*uname, *email, Role::Teacher),
-                (u.uname.as_str(), u.email.as_str(), u.role)
+                (u.uname(), u.email(), u.role())
             );
+        }
+
+        for stud in studs.drain(..) {
+            let s = match umap.remove(&stud.base.uname).unwrap() {
+                User::Student(s) => s,
+                x @ _ => panic!("Expected User::Student, got {:?}", &x),
+            };
+            assert!(same_students(&stud, &s));
+            db.delete_user(&stud.base.uname).await.unwrap();
+        }
+
+        for (uname, _, _) in TEACHERS.iter() {
             db.delete_user(uname).await.unwrap();
         }
 

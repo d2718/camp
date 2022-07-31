@@ -224,10 +224,10 @@ impl User {
 
     pub fn email(&self) -> &str {
         match self {
-            User::Admin(base) => &base.salt,
-            User::Boss(base) => &base.salt,
-            User::Teacher(t) => &t.base.salt,
-            User::Student(s) => &s.base.salt,
+            User::Admin(base) => &base.email,
+            User::Boss(base) => &base.email,
+            User::Teacher(t) => &t.base.email,
+            User::Student(s) => &s.base.email,
         }
     }
 
@@ -244,9 +244,11 @@ impl User {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::ensure_logging;
 
     #[test]
     fn students_from_csv() {
+        ensure_logging();
         let f = std::fs::File::open("test/good_students_0.csv").unwrap();
         let studs = Student::vec_from_csv_reader(f).unwrap();
         log::trace!("Students:\n{:#?}", &studs);
