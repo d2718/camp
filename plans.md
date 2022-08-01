@@ -42,7 +42,13 @@ CREATE TABLE students (
     last    TEXT,
     rest    TEXT,
     teacher TEXT REFERENCES teachers(uname),
-    parent  TEXT     /* parent email address */
+    parent  TEXT,    /* parent email address */
+    fall_exam            TEXT,
+    spring_exam          TEXT,
+    fall_exam_fraction   REAL,
+    spring_exam_fraction REAL,
+    fall_notices         SMALLINT,
+    spring_notices       SMALLINT
 );
 
 ```

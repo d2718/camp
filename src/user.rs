@@ -59,9 +59,21 @@ impl BaseUser {
         last: String,
         rest: String,
         teacher: String,
-        parent: String
+        parent: String,
+        fall_exam: Option<String>,
+        spring_exam: Option<String>,
+        fall_exam_fraction: f32,
+        spring_exam_fraction: f32,
+        fall_notices: i16,
+        spring_notices: i16,
     ) -> User {
-        User::Student(Student { base: self, last, rest, teacher, parent })
+        let s = Student {
+            base: self, last, rest, teacher, parent,
+            fall_exam, spring_exam,
+            fall_exam_fraction, spring_exam_fraction,
+            fall_notices, spring_notices,
+        };
+        User::Student(s)
     }
 }
 
@@ -82,6 +94,12 @@ pub struct Student {
     pub teacher: String,
     /// Parent email address(es? if possible?).
     pub parent: String,
+    pub fall_exam: Option<String>,
+    pub spring_exam: Option<String>,
+    pub fall_exam_fraction: f32,
+    pub spring_exam_fraction: f32,
+    pub fall_notices: i16,
+    pub spring_notices: i16,
 }
 
 impl Student {
@@ -136,7 +154,13 @@ impl Student {
             last,
             rest,
             teacher,
-            parent
+            parent,
+            fall_exam: None,
+            spring_exam: None,
+            fall_exam_fraction: 0.2_f32,
+            spring_exam_fraction: 0.2_f32,
+            fall_notices: 0,
+            spring_notices: 0,
         };
         Ok(stud)
     }

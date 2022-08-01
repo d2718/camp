@@ -19,7 +19,13 @@ CREATE TABLE students (
     last    TEXT,
     rest    TEXT,
     teacher TEXT REFERENCES teachers(uname),
-    parent  TEXT     /* parent email address */
+    parent  TEXT,    /* parent email address */
+    fall_exam   TEXT,
+    spring_exam TEXT,
+    fall_exam_fraction  REAL,
+    spring_exam_fraction REAL,
+    fall_notices   SMALLINT,
+    spring_notices SMALLINT
 );
 
 ```
@@ -32,6 +38,7 @@ use tokio_postgres::{Row, Transaction, types::{ToSql, Type}};
 
 use super::{Store, DbError};
 use crate::user::*;
+use crate::blank_string_means_none;
 
 /**
 The `TeacherSidecar` struct is to hold the contents of records queried from
@@ -56,6 +63,12 @@ struct StudentSidecar {
     rest: String,
     teacher: String,
     parent: String,
+    fall_exam: Option<String>,
+    spring_exam: Option<String>,
+    fall_exam_fraction: f32,
+    spring_exam_fraction: f32,
+    fall_notices: i16,
+    spring_notices: i16,
 }
 
 /// Turn a row queried from the 'users' table in to a `BaseUser.
@@ -109,6 +122,18 @@ fn student_from_row(row: &Row) -> Result<StudentSidecar, DbError> {
         rest: row.try_get("rest")?,
         teacher: row.try_get("teacher")?,
         parent: row.try_get("parent")?,
+        fall_exam_fraction: row.try_get("fall_exam_fraction")?,
+        spring_exam_fraction: row.try_get("spring_exam_fraction")?,
+        fall_notices: row.try_get("fall_notices")?,
+        spring_notices: row.try_get("spring_notices")?,
+        fall_exam: match row.try_get("fall_exam") {
+            Ok(x) => blank_string_means_none(x),
+            Err(_) => None,
+        },
+        spring_exam: match row.try_get("spring_exam") {
+            Ok(x) => blank_string_means_none(x),
+            Err(_) => None,
+        },
     };
 
     log::trace!("    ...student_from_row() returning {:?}", &s);
@@ -380,9 +405,22 @@ impl Store {
                 &[Type::TEXT, Type::TEXT, Type::TEXT, Type::TEXT]
             ),
             t.prepare_typed(
-                "INSERT INTO students (uname, last, rest, teacher, parent)
-                    VALUES ($1, $2, $3, $4, $5)",
-                &[Type::TEXT, Type::TEXT, Type::TEXT, Type::TEXT, Type::TEXT]
+                "INSERT INTO students (
+                    uname, last, rest, teacher, parent,
+                    fall_exam, spring_exam,
+                    fall_exam_fraction, spring_exam_fraction,
+                    fall_notices, spring_notices
+                )
+                    VALUES (
+                        $1, $2, $3, $4, $5,
+                        $6, $7, $8, $9, $10, $11
+                    )",
+                &[
+                    Type::TEXT, Type::TEXT, Type::TEXT, Type::TEXT, Type::TEXT,
+                    Type::TEXT, Type::TEXT,
+                    Type::FLOAT4, Type::FLOAT4,
+                    Type::INT2, Type::INT2
+                ]
             ),
         );
         let (base_user_insert_query, student_table_insert_query) = (buiq?, stiq?);
@@ -464,10 +502,15 @@ impl Store {
         */
         let mut n_stud_inserted: u64 = 0;
         {
-            let pvec: Vec<[&(dyn ToSql + Sync); 5]> = students.iter()
+            let pvec: Vec<[&(dyn ToSql + Sync); 11]> = students.iter()
                 .map(|s| {
-                    let p: [&(dyn ToSql + Sync); 5] =
-                        [&s.base.uname, &s.last, &s.rest, &s.teacher, &s.parent];
+                    let p: [&(dyn ToSql + Sync); 11] =
+                        [
+                            &s.base.uname, &s.last, &s.rest, &s.teacher, &s.parent,
+                            &s.fall_exam, &s.spring_exam,
+                            &s.fall_exam_fraction, &s.spring_exam_fraction,
+                            &s.fall_notices, &s.spring_notices
+                        ];
                     p
                 }).collect();
             
@@ -610,7 +653,13 @@ This absolutely shouldn't be able to happen, but here we are.",
                     s.last,
                     s.rest,
                     s.teacher,
-                    s.parent
+                    s.parent,
+                    s.fall_exam,
+                    s.spring_exam,
+                    s.fall_exam_fraction,
+                    s.spring_exam_fraction,
+                    s.fall_notices,
+                    s.spring_notices,
                 )
             );
         }
@@ -652,13 +701,19 @@ mod tests {
     use crate::store::tests::TEST_CONNECTION;
 
     fn same_students(a: &Student, b: &Student) -> bool {
-        if &a.base.uname != &b.base.uname { return false; }
-        if &a.base.role  != &b.base.role { return false; }
-        if &a.base.email != &b.base.email { return false; }
-        if &a.last       != &b.last { return false; }
-        if &a.rest       != &b.rest { return false; }
-        if &a.teacher    != &b.teacher { return false; }
-        if &a.parent     != &b.parent { return false; }
+        if &a.base.uname  != &b.base.uname { return false; }
+        if &a.base.role   != &b.base.role { return false; }
+        if &a.base.email  != &b.base.email { return false; }
+        if &a.last        != &b.last { return false; }
+        if &a.rest        != &b.rest { return false; }
+        if &a.teacher     != &b.teacher { return false; }
+        if &a.parent      != &b.parent { return false; }
+        if &a.fall_exam   != &b.fall_exam { return false; }
+        if &a.spring_exam != &b.spring_exam { return false; }
+        if &a.fall_exam_fraction   != &b.spring_exam_fraction { return false; }
+        if &a.spring_exam_fraction != &b.spring_exam_fraction { return false; }
+        if &a.fall_notices   != &b.fall_notices { return false; }
+        if &a.spring_notices != &b.spring_notices { return false; }
         true
     }
 

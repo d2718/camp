@@ -7,6 +7,16 @@ pub mod course;
 pub mod store;
 pub mod user;
 
+pub fn blank_string_means_none<S: AsRef<str>>(s: Option<S>) -> Option<S> {
+    match s {
+        None => None,
+        Some(x) => match x.as_ref().trim() {
+            "" => None,
+            _ => Some(x),
+        }
+    }
+}
+
 pub fn log_level_from_env() -> simplelog::LevelFilter {
     use simplelog::LevelFilter;
 
