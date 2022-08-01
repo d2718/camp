@@ -74,6 +74,12 @@ impl From<String> for DbError {
     fn from(s: String) -> DbError { DbError(s) }
 }
 
+impl std::fmt::Display for DbError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.0)
+    }
+}
+
 /**
 Possible results of attempting to authenticate with the database.
 */
@@ -157,7 +163,7 @@ impl Db {
         }
     }
     
-    async fn ensure_db_schema(&self) -> Result<(), DbError> {
+    pub async fn ensure_db_schema(&self) -> Result<(), DbError> {
         log::trace!("Db::ensure_db_schema() called.");
         let mut client = self.connect().await?;
         let t = client.transaction().await

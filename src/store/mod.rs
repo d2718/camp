@@ -124,6 +124,12 @@ impl From<String> for DbError {
     fn from(s: String) -> DbError { DbError(s) }
 }
 
+impl std::fmt::Display for DbError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.0)
+    }
+}
+
 pub struct Store {
     connection_string: String,
     salt_chars: Vec<char>,

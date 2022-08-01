@@ -689,6 +689,105 @@ This absolutely shouldn't be able to happen, but here we are.",
         log::trace!("    ...Store::get_users() returns {} Users.", &user_map.len());
         Ok(user_map)
     }
+
+    async fn get_base_user_by_uname(
+        t: &Transaction<'_>,
+        uname: &str
+    ) -> Result<Option<BaseUser>, DbError> {
+        match t.query_opt(
+            "SELECT * FROM users WHERE uname = $1",
+            &[&uname]
+        ).await? {
+            None => Ok(None),
+            Some(row) => Ok(Some(base_user_from_row(&row)?)),
+        }
+    }
+
+    async fn try_get_teacher_sidecar(
+        t: &Transaction<'_>,
+        uname: &str
+    ) -> Result<Option<TeacherSidecar>, DbError> {
+        match t.query_opt(
+            "SELECT * FROM teachers WHERE uname = $1",
+            &[&uname]
+        ).await? {
+            None => Ok(None),
+            Some(row) => Ok(Some(teacher_from_row(&row)?)),
+        }
+    }
+
+    async fn try_get_student_sidecar(
+        t: &Transaction<'_>,
+        uname: &str
+    ) -> Result<Option<StudentSidecar>, DbError> {
+        match t.query_opt(
+            "SELECT * FROM students WHERE uname = $1",
+            &[&uname]
+        ).await? {
+            None => Ok(None),
+            Some(row) => Ok(Some(student_from_row(&row)?)),
+        }
+    }
+
+    pub async fn get_user_by_uname(&self, uname: &str) -> Result<Option<User>, DbError> {
+        log::trace!("Store::get_user_by_uname( {:?} ) called.", uname);
+
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+
+        let base = match Store::get_base_user_by_uname(&t, uname).await? {
+            None => { return Ok(None); },
+            Some(bu) => bu,
+        };
+
+        let u = match base.role {
+            Role::Admin => base.into_admin(),
+            Role::Boss => base.into_boss(),
+            Role::Teacher => match Store::try_get_teacher_sidecar(&t, uname).await? {
+                None => {
+                    log::error!(
+"BaseUser {:?} has 'user' entry with role {}, but no corresponding sidecar in the appropriate table.",
+                        &base.uname, &base.role
+                    );
+                    let estr = format!(
+"User {:?} has a record in the 'users' table with role {}, but no corresponding
+sidecar entry in the appropriate table for that role.
+This absolutely shouldn't be able to happen, but here we are.",
+                        &base.uname, &base.role
+                    );
+                    return Err(DbError(estr));
+                },
+                Some(t) => base.into_teacher(t.name),
+            },
+            Role::Student => match Store::try_get_student_sidecar(&t, uname).await? {
+                None => {
+                    log::error!(
+"BaseUser {:?} has 'user' entry with role {}, but no corresponding sidecar in the appropriate table.",
+                    &base.uname, &base.role
+                    );
+                    let estr = format!(
+"User {:?} has a record in the 'users' table with role {}, but no corresponding
+sidecar entry in the appropriate table for that role.
+This absolutely shouldn't be able to happen, but here we are.",
+                        &base.uname, &base.role
+                    );
+                    return Err(DbError(estr));
+                },
+                Some(s) => {
+                    let u = base.into_student(
+                        s.last, s.rest, s.teacher, s.parent,
+                        s.fall_exam, s.spring_exam,
+                        s.fall_exam_fraction, s.spring_exam_fraction,
+                        s.fall_notices, s.spring_notices
+                    );
+                    u
+                }
+            }
+        };
+
+        log::trace!("    ...Store::get_user_by_uname() returns {:?}", &u);
+        Ok(Some(u))
+    }
 }
 
 #[cfg(test)]

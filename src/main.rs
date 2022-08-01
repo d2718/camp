@@ -21,24 +21,13 @@ use tower_http::{
     services::fs::{ServeDir, ServeFile},
 };
 
-use camp::config;
-//use camp::auth;
-//use camp::store;
-
-/**
-This guy will haul around some global variables and be passed in an
-`axum::Extension` to the handlers who need him.
-*/
-#[derive(Debug)]
-struct Glob {}
-
-/**
-Ensures both the auth and store databases have all the appropriate tables,
-as well as the existence of the default admin user.
-*/
-async fn ensure_defaults(_cfg: &config::Cfg) -> Result<(), String> {
-    Ok(())
-}
+use camp::{
+    auth, auth::AuthResult,
+    config, config::Glob,
+    course::{Course, Chapter},
+    store::Store,
+    user::{BaseUser, Role, Student, Teacher, User},
+};
 
 async fn catchall_error_handler(e: std::io::Error) -> impl IntoResponse {
     (
@@ -98,9 +87,8 @@ async fn main() {
     ).unwrap();
     log::info!("Logging started.");
 
-    let cfg = config::Cfg::default();
-    log::info!("Configuration:\n{:#?}", &cfg);
-    ensure_defaults(&cfg).await.unwrap();
+    let glob = config::load_configuration("config.toml").await.unwrap();
+    log::info!("Global variables:\n{:#?}", &glob);
 
     let serve_root = get_service(ServeFile::new("data/index.html"))
         .handle_error(catchall_error_handler);
@@ -113,9 +101,7 @@ async fn main() {
         .nest("/static", serve_static)
         .route("/login", post(dummy_login));
     
-    log::info!("Listening on {}", &cfg.addr);
-    
-    axum::Server::bind(&cfg.addr)
+    axum::Server::bind(&glob.addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
