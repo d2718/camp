@@ -11,6 +11,7 @@ use std::{
 use axum::{
     body::{Bytes, Full},
     http::{header, StatusCode},
+    http::header::{HeaderName, HeaderValue},
     response::Response,
 };
 use handlebars::Handlebars;
@@ -58,34 +59,78 @@ pub fn init<P: AsRef<Path>>(template_dir: P) -> Result<(), String> {
     Ok(())
 }
 
-pub fn respond_500() -> Response<Full<_>> {
+pub fn respond_500() -> Response<String> {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .header(header::CONTENT_TYPE, "text/html")
         .header(header::CONTENT_LENGTH, ERROR_500.len())
         .header(header::CACHE_CONTROL, "no-store")
-        .body(Full::from(ERROR_500.)).unwrap()
+        .body(ERROR_500.to_owned()).unwrap()
+}
+
+pub fn string_response(
+    code: StatusCode,
+    content_type: &str,
+    body: String,
+    addl_headers: &[(HeaderName, &[u8])],
+) -> Response<String> {
+    log::trace!(
+        "string_response( {}, {}, [ {} bytes of body ], [ {} add'l headers ] ) called.",
+        &code, content_type, body.len(), addl_headers.len()
+    );
+    let content_length = body.len();
+    let mut r = Response::builder()
+        .status(code)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_LENGTH, content_length)
+        .header(header::CACHE_CONTROL, "no-store");
+    for (name, value) in addl_headers.iter() {
+        match HeaderValue::from_bytes(value) {
+            Ok(v) => { r = r.header(name, v); },
+            Err(e) => {
+                log::error!(
+                    "Error converting \"{}\" into header value: {}",
+                    &String::from_utf8_lossy(value), &e
+                );
+                return respond_500()
+            }
+        }
+    }
+    match r.body(body) {
+        Ok(r) => r,
+        Err(e) => {
+            log::error!(
+                "Error generating string_response( {:?}, {:?}, {} body bytes):\n{}",
+                code, content_type, content_length, &e
+            );
+            respond_500()
+        }
+    }
 }
 
 pub fn serve_template<S>(
     code: StatusCode,
-    template: &str,
-    data: &S
-) -> Response<Full<_>> 
+    template_name: &str,
+    data: &S,
+    addl_headers: &[(HeaderName, &[u8])]
+) -> Response<String>
 where
     S: Serialize + Debug
 {
-    log::trace!("serve_template( {}, {:?}, ... ) called.", &code, template);
+    log::trace!("serve_template( {}, {:?}, ... ) called.", &code, template_name);
 
-    match TEMPLATES.get().unwrap().render_template(template, data) {
-        Ok(response_body) => Response::builder()
-            .status(code)
-            .header(header::CONTENT_TYPE, "text/html")
-            .header(header::CONTENT_LENGTH, response_body.len())
-            .header(header::CACHE_CONTROL, "no-store")
-            .body(Full::from(response_body)).unwrap(),
+    match TEMPLATES.get().unwrap().render(template_name, data) {
+        Ok(response_body) => string_response(
+            code,
+            "text/html",
+            response_body,
+            addl_headers
+        ),
         Err(e) => {
-            log::error!("Error rendering template {:?} with data {:?}", template, data);
+            log::error!(
+                "Error rendering template {:?} with data {:?}:\n{}",
+                template_name, data, &e
+            );
             respond_500()
         },
     }

@@ -24,7 +24,9 @@ form#login > *:nth-child(odd) { justify-self: end; }
 form#login > *:nth-child(even) { justify-self: start; }
 
 div#login-error {
-    display: inline-block;
+    display: block;
+    margin: 1em auto;
+    padding: 1em;
     width: 60ex;
     background-color: #fca;
     border: 1ex solid #820;

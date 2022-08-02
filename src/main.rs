@@ -1,21 +1,17 @@
 /*!
 Here we go!
 */
-use std::{
-    //collections::HashMap,
-    fmt::Write,
-};
-
 use axum::{
     //error_handling::HandleErrorLayer,
     //Extension,
     Form,
-    http::StatusCode, // header
-    response::{ErrorResponse, Html, IntoResponse},
+    http::{header, StatusCode},
+    response::{ErrorResponse, Html, IntoResponse, Response},
     Router,
     routing::{get_service, post},
 };
 use serde::Deserialize;
+use serde_json::json;
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tower_http::{
     services::fs::{ServeDir, ServeFile},
@@ -25,6 +21,7 @@ use camp::{
     auth, auth::AuthResult,
     config, config::Glob,
     course::{Course, Chapter},
+    inter,
     store::Store,
     user::{BaseUser, Role, Student, Teacher, User},
 };
@@ -42,36 +39,22 @@ struct LoginData {
     password: String,
 }
 
-async fn dummy_login(
-    Form(form): Form<LoginData>
-) -> Result<Html<String>, ErrorResponse> {
-    let mut buff = std::fs::read_to_string("data/dummy_login_head.html")
-        .map_err(|e| (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Error generating response: {}", &e)
-        ))?;
-    
-    write!(
-        &mut buff,
-        "
-<tr><td>uname:</td><td>{}</td></tr>
-<tr><td>password:</td><td>{}</td></tr>
-        ",
-        &form.uname, &form.password
-    ).map_err(|e| (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        format!("Error generating response: {}", &e)
-    ))?;
+async fn handle_login(
+    Form(_form): Form<LoginData>
+) -> Response<String> {
+    let data = json!({
+        "error_message": "You attempted to log in, but logging in is currently unimplemented."
+    });
 
-    buff.push_str(
-        &std::fs::read_to_string("data/dummy_login_foot.html")
-            .map_err(|e| (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Error generating response: {}", &e)
-            ))?
-    );
-
-    Ok(Html::from(buff))
+    inter::serve_template(
+        StatusCode::NOT_IMPLEMENTED,
+        "login_error",
+        &data,
+        &[
+            (header::SERVER, b"axum"),
+            (header::HeaderName::from_static("camp-special"), b"tomato paste"),
+        ]
+    )
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -99,7 +82,7 @@ async fn main() {
     let app = Router::new()
         .route("/", serve_root)
         .nest("/static", serve_static)
-        .route("/login", post(dummy_login));
+        .route("/login", post(handle_login));
     
     axum::Server::bind(&glob.addr)
         .serve(app.into_make_service())
