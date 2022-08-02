@@ -3,7 +3,7 @@ Structs to hold configuration data and global variables.
 */
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use handlebars::Handlebars;
 use serde::Deserialize;
@@ -11,6 +11,7 @@ use serde::Deserialize;
 use crate::{
     auth, auth::AuthResult,
     course::Course,
+    inter,
     store::Store,
     user::{BaseUser, Role, Student, Teacher, User},
 };
@@ -24,6 +25,7 @@ struct ConfigFile {
     admin_email: Option<String>,
     host: Option<String>,
     port: Option<u16>,
+    templates_dir: Option<String>
 }
 
 #[derive(Debug)]
@@ -34,6 +36,7 @@ pub struct Cfg {
     pub default_admin_password: String,
     pub default_admin_email: String,
     pub addr: SocketAddr,
+    pub templates_dir: PathBuf,
 }
 
 impl std::default::Default for Cfg {
@@ -48,6 +51,7 @@ impl std::default::Default for Cfg {
                 "0.0.0.0".parse().unwrap(),
                 8001
             ),
+            templates_dir: PathBuf::from("templates/"),
         }
     }
 }
@@ -88,6 +92,9 @@ impl Cfg {
         if let Some(n) = cf.port {
             c.addr.set_port(n);
         }
+        if let Some(s) = cf.templates_dir {
+            c.templates_dir = PathBuf::from(&s);
+        }
 
         Ok(c)
     }
@@ -98,20 +105,19 @@ This guy will haul around some global variables and be passed in an
 `axum::Extension` to the handlers who need him.
 */
 #[derive(Debug)]
-pub struct Glob<'a> {
+pub struct Glob {
     pub auth_db_connect_string: String,
     pub data_db_connect_string: String,
     pub courses: HashMap<i64, Course>,
     pub users: HashMap<String, User>,
     pub addr: SocketAddr,
-    pub templates: Handlebars<'a>,
 }
 
 /// Loads system configuration and ensures all appropriate database tables
 /// exist.
 ///
 /// Also assures existence of default admin.
-pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob<'static>, String> {
+pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob, String> {
     let cfg = Cfg::from_file(path.as_ref())?;
     log::info!("Configuration file read:\n{:#?}", &cfg);
 
@@ -218,9 +224,7 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob<'static>
         .map_err(|e| format!("Error retrieving users from data DB: {}", &e))?;
     log::info!("Retrieved {} users from data DB.", &users.len());
 
-    let mut templates = Handlebars::new();
-    templates.register_templates_directory(".html", "templates/")
-        .map_err(|e| format!("Error registering template directory: {}", &e))?;
+    inter::init(&cfg.templates_dir)?;
 
     let glob = Glob {
         auth_db_connect_string: cfg.auth_db_connect_string,
@@ -228,7 +232,6 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob<'static>
         courses,
         users,
         addr: cfg.addr,
-        templates,
     };
 
     Ok(glob)

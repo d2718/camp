@@ -4,6 +4,7 @@
 pub mod auth;
 pub mod config;
 pub mod course;
+pub mod inter;
 pub mod store;
 pub mod user;
 
