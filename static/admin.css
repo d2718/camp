@@ -1,0 +1,37 @@
+* {
+    margin: 0; padding: 0; border: 0;
+    box-sizing: border-box;
+}
+
+ul.tabs {
+    display: flex;
+    width: calc(100vw - 6em);
+    text-align: left;
+    margin: 0 3em;
+    list-style-type: none;
+}
+ul.tabs > li { height: 3em; }
+ul.tabs div.tab-content {
+    display: none;
+    overflow: hidden;
+    position: absolute;
+    top: 3em; left: 3em;
+    width: calc(100vw - 6em);
+    background-color: #ddd;
+    padding: 1em;
+}
+
+/* Move the actual tab-selection radio buttons out of the window entirely. */
+input.tab-button {
+    position: fixed;
+    top: -100vh; left: -100vw;
+}
+input.tab-button ~ label {
+    padding: 1ex;
+    display: inline-block;
+    height: 100%;
+    line-height: calc(3em - 2ex);
+    cursor: pointer;
+}
+input.tab-button:checked ~ label { background-color: #ddd; }
+input.tab-button:checked ~ div.tab-content { display: block; }

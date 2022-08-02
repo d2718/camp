@@ -3,14 +3,11 @@ body {
     background-color: #ccc;
     color: #246;
     font-family: serif;
+    text-align: center;
 }
-
-h1 { text-align: center; }
 
 form#login {
     display: grid;
-/*     width: 40ex;
-    height: 5em */
     margin-left: auto; margin-right: auto;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto;
@@ -32,4 +29,12 @@ div#login-error {
     border: 1ex solid #820;
     border-radius: 1ex;
     text-align: justify;
+}
+
+div#footer {
+    position: absolute;
+    bottom: 1ex;
+    left: 1em;
+    width: calc(100vw - 2em);
+    font-size: smaller;
 }

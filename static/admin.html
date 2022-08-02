@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>CAMP | Admin View</title>
+        <link rel="stylesheet" href="/static/admin.css">
+        <link rel="icon" type="image/png" href="/static/camp_icon.png">
+    </head>
+    <body>
+        <ul class="tabs">
+
+<li>
+    <input type="radio" name="tabs" id="staff-tab-radio"
+           class="tab-button" checked>
+    <label for="staff-tab-radio" tabindex="0">Staff</label>
+
+    <div id="staff-tab-content" class="tab-content">
+        <h2>Admins</h2>
+        <div id="staff-admins">
+            <p>populating list of Admins...</p>
+        </div>
+        <h2>Bosses</h2>
+        <div id="staff-bosses">
+            <p>populating list of Bosses...</p>
+        </div><h2>Teachers</h2>
+        <div id="staff-teachers">
+            <p>populating list of Teachers...</p>
+        </div>
+    </div>
+</li>
+
+<li>
+    <input type="radio" name="tabs" id="student-tab-radio"
+           class="tab-button">
+    <label for="student-tab-radio" tabindex="1">Students</label>
+
+    <div id="student-tab-content" class="tab-content">
+        <h2>Students</h2>
+        <div id="students">
+            <p>populating students...</p>
+        </div>
+    </div>
+</li>
+
+<li>
+    <input type="radio" name="tabs" id="course-tab-radio"
+           class="tab-button">
+    <label for="course-tab-radio" tabindex="2">Courses</label>
+
+    <div id="course-tab-content" class="tab-content">
+        <h2>Courses</h2>
+        <div id="courses">
+            <p>populating courses...</p>
+        </div>
+    </div>
+</li>
+
+        </ul>
+    </body>
+</html>

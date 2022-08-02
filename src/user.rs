@@ -77,13 +77,13 @@ impl BaseUser {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Teacher {
     pub base: BaseUser,
     pub name: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Student {
     pub base:BaseUser,
     /// Last name of the student.
@@ -219,7 +219,7 @@ impl Student {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum User {
     Admin(BaseUser),
     Boss(BaseUser),

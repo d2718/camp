@@ -18,6 +18,7 @@ pub fn blank_string_means_none<S: AsRef<str>>(s: Option<S>) -> Option<S> {
     }
 }
 
+#[cfg(unix)]
 pub fn log_level_from_env() -> simplelog::LevelFilter {
     use simplelog::LevelFilter;
 
@@ -37,6 +38,11 @@ pub fn log_level_from_env() -> simplelog::LevelFilter {
         "off" => LevelFilter::Off,
         _ => LevelFilter::Warn,
     }
+}
+
+#[cfg(windows)]
+pub fn log_level_from_env() -> simplelog::LevelFilter {
+    simplelog::LevelFilter::max()
 }
 
 #[cfg(test)]
