@@ -90,18 +90,13 @@ async fn main() {
 
     let addr = glob.read().await.addr.clone();
     let app = Router::new()
-        .route("/", serve_root)
-        .nest("/static", serve_static)
-        .route("/login", post(handle_login))
-            .layer(Extension(glob))
         .route("/admin", post(inter::admin::api))
-            .layer(Extension(glob))
-            .layer(
-                ServiceBuilder::new()
-                    .layer(Extension(glob))
-                    .layer(middleware::from_fn(inter::key_authenticate))
-            )
-            .layer(middleware::from_fn(inter::request_identity));
+        .layer(middleware::from_fn(inter::key_authenticate))
+        .layer(middleware::from_fn(inter::request_identity))
+        .route("/login", post(handle_login))
+        .layer(Extension(glob.clone()))
+        .nest("/static", serve_static)
+        .route("/", serve_root);
     
     axum::Server::bind(&addr)
         .serve(app.into_make_service())

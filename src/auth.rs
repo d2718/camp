@@ -26,7 +26,7 @@ use rand::{Rng, distributions};
 
 const DEFAULT_KEY_LENGTH: usize = 32;
 const DEFAULT_KEY_CHARS: &str =
-"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|/?;:,.<>~";
+"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const DEFAULT_KEY_LIFE_SECONDS: u64 = 20 * 60;  // 20 minutes
 
 static SCHEMA_TEST: &[&str] = &[

@@ -7,6 +7,7 @@ use axum::{
     extract::Extension,
     http::header::{HeaderMap, HeaderName},
 };
+use serde_json::json;
 use tokio::sync::RwLock;
 
 use crate::config::Glob;
@@ -52,34 +53,16 @@ pub async fn login(
         }
     };
 
-    let uname_header_value = match HeaderValue::try_from(&base.uname) {
-        Ok(v) => v,
-        Err(e) => {
-            log::error!("uname unable to be converted into HTTP header value: {}", &e);
-            return html_500();
-        }
-    };
-    let key_header_value = match HeaderValue::try_from(auth_key) {
-        Ok(v) => v,
-        Err(e) => {
-            log::error!("Auth key unable to be converted to HTTP header value: {}", &e);
-            return html_500();
-        }
-    };
+    let data = json!({
+        "uname": &base.uname,
+        "key": &auth_key
+    });
 
-    serve_static(
+    serve_template(
         StatusCode::OK,
-        "static/admin.html",
-        vec![
-            (
-                HeaderName::from_static("x-camp-key"),
-                key_header_value
-            ),
-            (
-                HeaderName::from_static("x-camp-uname"),
-                uname_header_value
-            )
-        ]
+        "admin",
+        &data,
+        vec![]
     )
 }
 
@@ -88,26 +71,35 @@ pub async fn api(
     Extension(glob): Extension<Arc<RwLock<Glob>>>
 ) -> Response {
 
-    /**
-     * I AM HERE
-     * 
-     *  We need to get this uname, then the User struct.
-     */
+    let uname: &str = match headers.get("x-camp-uname") {
+        Some(uname) => match uname.to_str() {
+            Ok(s) => s,
+            Err(_) => { return text_500(None); }
+        },
+        None => { return text_500(None); },
+    };
+
+    let u = {
+        let glob = glob.read().await;
+        if let Some(u) = glob.users.get(uname) {
+            u.clone()
+        } else {
+            return text_500(None);
+        }
+    };
 
     let admin = match u {
         User::Admin(a) => a,
         _ => {
-            return string_response(
+            return (
                 StatusCode::FORBIDDEN,
-                "text/plain",
                 "Who is this? What's your operating number?".to_owned(),
-                &[]
-            );
+            ).into_response();
         },
     };
 
     (
         StatusCode::NOT_IMPLEMENTED,
-        "Sorry, this isn't implemented yet.".to_owned(),
+        format!("Sorry, {}, this isn't implemented yet.", &admin.uname)
     ).into_response()
 }

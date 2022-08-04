@@ -1,25 +1,32 @@
 div#progress,
 div#error {
     display: none;
-    position: static;
+    position: fixed;
+    flex-wrap: nowrap;
+    align-items: center;
     width: 33vw;
     min-width: 40ex;
     border-width: 1ex;
     border-radius: 1ex;
     border-style: solid;
+    z-index: 2;
 }
 div#progress {
+    justify-content: flex-start;
     background-color: #abc;
     border-color: #248;
     bottom: 1em; right: 1em;
 }
 div#error {
-    background-color: #caa;
-    border-color: #822;
+    justify-content: space-between;
+    background-color: #fca;
+    border-color: #820;
     top: 1em; left: 1em;
 }
+div#progress > *,
+div#error > * { margin: 1em; }
 div#progress img { width: 3em; }
-div#error img { width 3em; }
+div#error img { width: 3em; }
 div#progress ul,
 div#error > ul {
     list-style-type: circle;

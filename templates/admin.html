@@ -4,7 +4,16 @@
         <meta charset="utf-8">
         <title>CAMP | Admin View</title>
         <link rel="stylesheet" href="/static/admin.css">
+        <link rel="stylesheet" href="/static/api_request.css">
         <link rel="icon" type="image/png" href="/static/camp_icon.png">
+        <script>
+const AUTH = {
+    uname: "{{uname}}",
+    key: "{{key}}"
+};
+        </script>
+        <script src="/static/api_request.js" defer></script>
+        <script src="/static/admin.js" defer></script>
     </head>
     <body>
         <ul class="tabs">
@@ -26,6 +35,11 @@
         <div id="staff-teachers">
             <p>populating list of Teachers...</p>
         </div>
+
+        <div id="debug">
+            <button id="push-me"><label>poosh mii</label></button>
+        </div>
+
     </div>
 </li>
 
@@ -58,7 +72,7 @@
         </ul>
 
         <div id="progress">
-            <img src="/static/blue_waiting.giv">
+            <img src="/static/blue_waiting.gif">
             <ul></ul>
         </div>
 
