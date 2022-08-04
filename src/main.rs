@@ -7,12 +7,11 @@ use axum::{
     //error_handling::HandleErrorLayer,
     Extension,
     Form,
-    http::{header, StatusCode},
-    response::{ErrorResponse, Html, IntoResponse, Response},
+    http::StatusCode,
+    response::{IntoResponse, Response},
     Router,
     routing::{get_service, post},
 };
-use serde::Deserialize;
 use serde_json::json;
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::RwLock;
@@ -21,12 +20,9 @@ use tower_http::{
 };
 
 use camp::{
-    auth, auth::AuthResult,
     config, config::Glob,
-    course::{Course, Chapter},
-    inter, inter::CampResponse,
-    store::Store,
-    user::{BaseUser, Role, Student, Teacher, User},
+    inter,
+    user::User,
 };
 
 async fn catchall_error_handler(e: std::io::Error) -> impl IntoResponse {
@@ -41,7 +37,7 @@ async fn catchall_error_handler(e: std::io::Error) -> impl IntoResponse {
 async fn handle_login(
     Form(form): Form<inter::LoginData>,
     Extension(glob): Extension<Arc<RwLock<Glob>>>
-) -> CampResponse {
+) -> Response {
     log::trace!("handle_login( {:?}, [ global state ]) called.", &form);
 
     let user = {
@@ -64,10 +60,7 @@ async fn handle_login(
         StatusCode::NOT_IMPLEMENTED,
         "login_error",
         &data,
-        &[
-            (header::SERVER, b"axum"),
-            (header::HeaderName::from_static("camp-special"), b"tomato paste"),
-        ]
+        vec![]
     )
 }
 

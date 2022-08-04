@@ -3,7 +3,10 @@ Subcrate for interoperation with Admin users.
 */
 use std::sync::Arc;
 
-use axum::http::header::HeaderName;
+use axum::{
+    extract::Extension,
+    http::header::{HeaderMap, HeaderName},
+};
 use tokio::sync::RwLock;
 
 use crate::config::Glob;
@@ -14,7 +17,7 @@ pub async fn login(
     base: BaseUser,
     form: LoginData,
     glob: Arc<RwLock<Glob>>
-) -> CampResponse {
+) -> Response {
     log::trace!(
         "admin::login( {:?}, {:?}, [ global state ] ) called.",
         &base, &form
@@ -50,11 +53,49 @@ pub async fn login(
         }
     };
 
+    let key_header_value = match HeaderValue::try_from(auth_key) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("Auth key unable to be converted to HTTP header value: {}", &e);
+            return html_500();
+        }
+    };
+
     serve_static(
         StatusCode::OK,
         "static/admin.html",
-        &[(
-            HeaderName::from_static("x-camp-key"), auth_key.as_bytes()
-        )]
+        vec![(
+                HeaderName::from_static("x-camp-key"),
+                key_header_value
+            )]
     )
 }
+
+/* pub async fn api(
+    headers: HeaderMap,
+    Extension(glob): Extension<Arc<RwLock<Glob>>>
+) -> CampResponse {
+    let u = match key_authenticate(&headers, glob.clone()).await {
+        Ok(u) => u,
+        Err(resp) => { return resp; },
+    };
+
+    let admin = match u {
+        User::Admin(a) => a,
+        _ => {
+            return string_response(
+                StatusCode::FORBIDDEN,
+                "text/plain",
+                "Who is this? What's your operating number?".to_owned(),
+                &[]
+            );
+        },
+    };
+
+    string_response(
+        StatusCode::NOT_IMPLEMENTED,
+        "text/plain",
+        "Sorry, this isn't implemented yet.".to_owned(),
+        &[]
+    )
+} */

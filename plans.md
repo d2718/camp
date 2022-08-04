@@ -1,4 +1,6 @@
 
+# Database Design
+
 ## Auth
 
 Separate database from the rest of the sections.
@@ -100,3 +102,121 @@ CREATE TABLE goals (
 );
 
 ```
+
+## Reporting Extras
+
+This information might even live in a separate database?
+
+```sql
+
+CREATE TABLE student_misc (
+    uname TEXT PRIMARY KEY,
+    /* each fall social-emotional score */
+    /* each spring social-emotional score */
+    fall_complete
+    spring_complete
+    fall_courses_complete
+    spring_courses_complete
+    fall_goals_remaining
+    spring_goals_remaining
+);
+```
+
+# API
+
+### `/`
+A `GET` presents a page with the login form. The form has
+
+  * `<input type="text" name="uname">`
+  * `<input type="password" name="password">`
+The form action `POST`s the login info to `/login`.
+
+### `/login`
+Accepts the login `POST` from the `<form>` on `/`; attempts to log the user in.
+
+Will serve a login error or the appropriate page for that `User` type.
+
+### `/static`
+Maps to the directory of static assets that should just be served as-is.
+
+### `/admin`
+The `Admin` API endpoint.
+
+`POST`s to this resource should specify authentication headers
+
+  * `x-camp-uname` the uname of the Admin making the request
+  * `x-camp-key` the auth key issued to the Admin upon login
+as well as at least
+
+  * `x-camp-action` which should speciy which action the Admin is attempting
+    to take with this request.
+  * `x-camp-request-id`, which should be returned with all responses
+    so that the frontend can track which requests have been completed.
+
+Other information will be `x-camp-action` specific, and will mostly consist
+of `content-type: application/json` bodies.
+
+```text
+x-camp-action: populate-admins
+x-camp-action: populate-teachers
+x-camp-action: populate-students
+x-camp-action: populate-courses
+```
+Return data about the specified objects in JSON format, with the same
+`x-camp-action` response header, and `content-type: application/json`.
+
+```text
+x-camp-action: add-admin
+x-camp-action: add-teacher
+x-camp-action: add-student
+```
+Add the appropriate type of `User` from data specified in the JSON body.
+Response should be identical to an `x-camp-action: populate-xxx` request.
+
+`x-camp-action: delete-user`
+
+Accompanied by the `x-camp-delete-uname` header, this should delete the
+given `User`, and return the appropriate `x-camp-action: populate-xxx`
+response based on `User` type.
+
+`x-camp-action: upload-students`
+
+Insert multiple students based on the contents of the
+`content-type: text/csv` body. Should return a
+`x-camp-action: populate-students` response.
+
+`x-camp-action: insert-course`
+
+Insert a new, chapterless `Course` based on the
+`content-type: application/json` body. Response should be the same
+as `x-camp-action: populate-courses`.
+
+`x-camp-action: delete-course`
+
+Along with the `x-camp-delete-id` header, remove the specified `Course` and
+all of its chapters from the database, and return the
+`x-camp-action: populate-courses` response.
+
+This should fail if there are any students who currently have goals
+from the given course.
+
+`x-camp-action: insert-chapter`
+
+Insert a new `Chapter` to an extant `Course` based on the JSON body.
+Response should be `x-camp-action: single-course` and contain a JSON
+body of information just to replace that one course.
+
+`x-camp-action: delete-chapter`
+
+Along with the `x-camp-delete-id` header, remove the specified `Chapter`
+from the database, returning the appropriate `x-camp-action: single-course`
+response.
+
+This should fail if there are any students who currently have this chapter
+as a goal.
+
+`x-camp-action: upload-course`
+
+Insert a new course, and all of its chapters, based on the contents of
+the hybrid TOML/CSV body (should be `content-type: text/plain`).
+Respose should be the same as `x-camp-action: populate-courses`.

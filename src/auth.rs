@@ -415,7 +415,7 @@ impl Db {
         
     Also updates the key's `last_used` time to the current time on success.
     */
-    async fn check_key(
+    pub async fn check_key(
         &self,
         uname: &str,
         key: &str
