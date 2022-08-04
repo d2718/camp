@@ -8,6 +8,7 @@ use axum::{
     Extension,
     Form,
     http::StatusCode,
+    middleware,
     response::{IntoResponse, Response},
     Router,
     routing::{get_service, post},
@@ -15,6 +16,7 @@ use axum::{
 use serde_json::json;
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::RwLock;
+use tower::ServiceBuilder;
 use tower_http::{
     services::fs::{ServeDir, ServeFile},
 };
@@ -78,7 +80,6 @@ async fn main() {
     log::info!("Logging started.");
 
     let glob = config::load_configuration("config.toml").await.unwrap();
-    log::info!("Global variables:\n{:#?}", &glob);
     let glob = Arc::new(RwLock::new(glob));
 
     let serve_root = get_service(ServeFile::new("data/index.html"))
@@ -92,7 +93,15 @@ async fn main() {
         .route("/", serve_root)
         .nest("/static", serve_static)
         .route("/login", post(handle_login))
-            .layer(Extension(glob));
+            .layer(Extension(glob))
+        .route("/admin", post(inter::admin::api))
+            .layer(Extension(glob))
+            .layer(
+                ServiceBuilder::new()
+                    .layer(Extension(glob))
+                    .layer(middleware::from_fn(inter::key_authenticate))
+            )
+            .layer(middleware::from_fn(inter::request_identity));
     
     axum::Server::bind(&addr)
         .serve(app.into_make_service())

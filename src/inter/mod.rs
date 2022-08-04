@@ -22,6 +22,7 @@ use serde::Serialize;
 use serde_json::json;
 use tokio::sync::RwLock;
 
+use crate::auth::AuthResult;
 use crate::config::Glob;
 
 pub mod admin;
@@ -112,69 +113,18 @@ pub fn html_500() -> Response {
     ).into_response()
 }
 
-/**
-Return plain text response in the case of an unrecoverable* error.
-
-(*"Unrecoverable" from the perspective of fielding the current request,
-not from the perspective of the program crashing.)
-*/
 pub fn text_500(text: Option<String>) -> Response {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        match text {
-            None => TEXT_500.to_owned(),
-            Some(text) => text,
-        }
-    ).into_response()
+    match text {
+        Some(text) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            text
+        ).into_response(),
+        None => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            TEXT_500.to_owned()
+        ).into_response()
+    }
 }
-
-/* pub fn string_response(
-    code: StatusCode,
-    content_type: &str,
-    body: String,
-    addl_headers: &[(HeaderName, &[u8])],
-) -> Response {
-    log::trace!(
-        "string_response( {}, {}, [ {} bytes of body ], [ {} add'l headers ] ) called.",
-        &code, content_type, body.len(), addl_headers.len()
-    );
-    let content_length = body.len();
-    let mut r = Response::builder()
-        .status(code)
-        .header(header::CONTENT_TYPE, content_type)
-        .header(header::CONTENT_LENGTH, content_length)
-        .header(header::CACHE_CONTROL, "no-store");
-    for (name, value) in addl_headers.iter() {
-        match HeaderValue::from_bytes(value) {
-            Ok(v) => { r = r.header(name, v); },
-            Err(e) => {
-                log::error!(
-                    "Error converting \"{}\" into header value: {}",
-                    &String::from_utf8_lossy(value), &e
-                );
-                if content_type == "text/html" {
-                    return html_500();
-                } else {
-                    return text_500(None);
-                }
-            }
-        }
-    }
-    match r.body(body) {
-        Ok(r) => r,
-        Err(e) => {
-            log::error!(
-                "Error generating string_response( {:?}, {:?}, {} body bytes):\n{}",
-                code, content_type, content_length, &e
-            );
-            if content_type == "text/html" {
-                html_500()
-            } else {
-                text_500(None)
-            }
-        }
-    }
-} */
 
 pub fn serve_template<S>(
     code: StatusCode,
@@ -279,54 +229,88 @@ pub async fn request_identity<B>(
     response
 }
 
-/* pub async fn key_authenticate(
-    headers: &HeaderMap,
-    glob: Arc<RwLock<Glob>>
-) -> Result<crate::user::User, CampResponse> {
-    use crate::auth::{Db, AuthResult};
+pub async fn key_authenticate<B>(
+    req: Request<B>,
+    next: Next<B>,
+) -> Response {
+    let glob: &Arc<RwLock<Glob>> = req.extensions().get().unwrap();
 
-    let uname = match headers.get("x-camp-uname") {
-        Some(uname) => String::from_utf8_lossy(uname.as_bytes()).into_owned(),
+    let key = match req.headers().get("x-camp-key") {
+        Some(k_val) => match k_val.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!(
+                    "Failed converting auth key value {:?} to &str: {}",
+                    k_val, &e
+                );
+                return respond_bad_request(
+                    "x-camp-key value unrecognizable.".to_owned()
+                );
+            },
+        },
         None => {
-            return Err(respond_bad_request(
-                "Missing header \"x-camp-uname\".".to_owned()
-            ));
+            return respond_bad_request(
+                "Request must have an x-camp-key header.".to_owned()
+            );
         },
     };
-    let key = match headers.get("x-camp-key") {
-        Some(key) => String::from_utf8_lossy(key.as_bytes()).into_owned(),
+
+    let uname = match req.headers().get("x-camp-uname") {
+        Some(u_val) => match u_val.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!(
+                    "Failed converting uname value {:?} to &str: {}",
+                    u_val, &e
+                );
+                return respond_bad_request(
+                    "x-camp-uname value unrecognizable.".to_owned()
+                );
+            },
+        },
         None => {
-            return Err(respond_bad_request(
-                "Missing header \"x-camp-key\".".to_owned()
-            ));
-        }
+            return respond_bad_request(
+                "Request must have an x-camp-uname header.".to_owned()
+            );
+        },
     };
 
-    let (u, auth_db) = {
-        let glob = glob.read().await;
-        let u = match glob.users.get(&uname) {
-            Some(u) => u.clone(),
-            None => { return Err(respond_bad_key()); },
-        };
-        let auth_db = Db::new(glob.auth_db_connect_string.clone());
-        (u, auth_db)
-    };
+    // Lololol the chain here.
+    //
+    // But seriously, we return the result, then match on the returned value,
+    // instead of just matching on the huge-ass chain expression so that
+    // the locks will release.
+    let res = glob.read().await.auth().read().await.check_key(
+        uname, key
+    ).await;
 
-    match auth_db.check_key(u.uname(), &key).await {
+    match res {
         Err(e) => {
             log::error!(
-                "auth::Db.check_key( {:?} {:?} ) returns: {}",
-                u.uname(), &key, &e
+                "auth::Db::check_key( {:?}, {:?} ) returned error: {}",
+                uname, key, &e
             );
-            Err(text_500(None))
+
+            return text_500(None);
         },
-        Ok(AuthResult::Ok) => Ok(u),
-        Ok(x) => {
-            log::error!(
-                "auth::Db::check_key( {:?}, {:?} ) returns {:?}, which should never happen.",
-                u.uname(), &key, &x
-            );
-            Err(text_500(None))
+        Ok(AuthResult::InvalidKey) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                "Invalid authorization key.".to_owned(),
+            ).into_response();
+        },
+        Ok(AuthResult::Ok) => {
+            // This is the good path. We will just fall through and call the
+            // next layer after the match.
         }
+        Ok(x) => {
+            log::warn!(
+                "auth::Db::check_key() returned {:?}, which should never happen.",
+                &x
+            );
+            return text_500(None);
+        },
     }
-} */
+
+    next.run(req).await
+}

@@ -4,9 +4,11 @@ Structs to hold configuration data and global variables.
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use handlebars::Handlebars;
 use serde::Deserialize;
+use tokio::sync::RwLock;
 
 use crate::{
     auth, auth::AuthResult,
@@ -104,13 +106,17 @@ impl Cfg {
 This guy will haul around some global variables and be passed in an
 `axum::Extension` to the handlers who need him.
 */
-#[derive(Debug)]
 pub struct Glob {
-    pub auth_db_connect_string: String,
-    pub data_db_connect_string: String,
+    auth: Arc<RwLock<auth::Db>>,
+    data: Arc<RwLock<Store>>,
     pub courses: HashMap<i64, Course>,
     pub users: HashMap<String, User>,
     pub addr: SocketAddr,
+}
+
+impl Glob {
+    pub fn auth(&self) -> Arc<RwLock<auth::Db>> { self.auth.clone() }
+    pub fn data(&self) -> Arc<RwLock<Store>>    { self.data.clone() }
 }
 
 /// Loads system configuration and ensures all appropriate database tables
@@ -227,8 +233,8 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob, String>
     inter::init(&cfg.templates_dir)?;
 
     let glob = Glob {
-        auth_db_connect_string: cfg.auth_db_connect_string,
-        data_db_connect_string: cfg.data_db_connect_string,
+        auth: Arc::new(RwLock::new(auth_db)),
+        data: Arc::new(RwLock::new(data_db)),
         courses,
         users,
         addr: cfg.addr,

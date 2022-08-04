@@ -23,16 +23,15 @@ pub async fn login(
         &base, &form
     );
 
-    let auth_db = {
-        let glob = glob.read().await;
-        auth::Db::new(glob.auth_db_connect_string.clone())
+    let auth_response = {
+        glob.read().await.auth().read().await.check_password_and_issue_key(
+            &base.uname,
+            &form.password,
+            &base.salt
+        ).await
     };
 
-    let auth_key = match auth_db.check_password_and_issue_key(
-        &base.uname,
-        &form.password,
-        &base.salt
-    ).await {
+    let auth_key = match auth_response {
         Err(e) => {
             log::error!(
                 "Error: auth::Db::check_password_and_issue_key( {:?}, {:?}, [ Glob ]): {}",
@@ -71,14 +70,16 @@ pub async fn login(
     )
 }
 
-/* pub async fn api(
+pub async fn api(
     headers: HeaderMap,
     Extension(glob): Extension<Arc<RwLock<Glob>>>
-) -> CampResponse {
-    let u = match key_authenticate(&headers, glob.clone()).await {
-        Ok(u) => u,
-        Err(resp) => { return resp; },
-    };
+) -> Response {
+
+    /**
+     * I AM HERE
+     * 
+     *  We need to get this uname, then the User struct.
+     */
 
     let admin = match u {
         User::Admin(a) => a,
@@ -92,10 +93,8 @@ pub async fn login(
         },
     };
 
-    string_response(
+    (
         StatusCode::NOT_IMPLEMENTED,
-        "text/plain",
         "Sorry, this isn't implemented yet.".to_owned(),
-        &[]
-    )
-} */
+    ).into_response()
+}
