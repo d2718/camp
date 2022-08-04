@@ -6,6 +6,8 @@ use std::sync::Arc;
 use axum::{
     extract::Extension,
     http::header::{HeaderMap, HeaderName},
+    Json,
+    response::{IntoResponse, Response},
 };
 use serde_json::json;
 use tokio::sync::RwLock;
@@ -68,6 +70,7 @@ pub async fn login(
 
 pub async fn api(
     headers: HeaderMap,
+    body: Option<String>,
     Extension(glob): Extension<Arc<RwLock<Glob>>>
 ) -> Response {
 
@@ -88,8 +91,8 @@ pub async fn api(
         }
     };
 
-    let admin = match u {
-        User::Admin(a) => a,
+    match u {
+        User::Admin(_) => { /* Okay, request may proceed. */ },
         _ => {
             return (
                 StatusCode::FORBIDDEN,
@@ -98,8 +101,86 @@ pub async fn api(
         },
     };
 
+    let action = match headers.get("x-camp-action") {
+        Some(act) => match act.to_str() {
+            Ok(s) => s,
+            Err(_) => { return respond_bad_request(
+                "x-camp-action header unrecognizable.".to_owned()
+            ); },
+        },
+        None => {
+            return respond_bad_request(
+                "Request must have an x-camp-action header.".to_owned()
+            );
+        },
+    };
+
+    match action {
+        "populate-admins" => {
+            populate_admins(glob.clone()).await
+        },
+        x => {
+            respond_bad_request(
+                format!("{:?} is not a recognizable x-camp-action value.", x)
+            )
+        },
+    }
+}
+
+async fn populate_admins(glob: Arc<RwLock<Glob>>) -> Response {
+    log::trace!("populate_admins( Glob ) called.");
+
+    let glob = glob.read().await;
+    let admins: Vec<&User> = glob.users.iter()
+        .map(|(_, u)| u)
+        .filter(|&u| u.role() == Role::Admin)
+        .collect();
+
     (
-        StatusCode::NOT_IMPLEMENTED,
-        format!("Sorry, {}, this isn't implemented yet.", &admin.uname)
+        StatusCode::OK,
+        [(
+            HeaderName::from_static("x-camp-action"),
+            HeaderValue::from_static("populate-admins")
+        )],
+        Json(admins),
     ).into_response()
+}
+
+async fn add_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires a JSON body.".to_owned()
+        ); },
+    };
+
+    let u: User = match serde_json::from_str(&body) {
+        Ok(u) => u,
+        Err(e) => {
+            log::error!(
+                "Error deserializing JSON {:?} as BaseUser: {}",
+                &body, &e
+            );
+            return text_500(Some("Unable to deserialize User struct.".to_owned()));
+        },
+    };
+
+    {
+        let mut glob = glob.write().await;
+        if let Err(e) = glob.insert_user(&u).await {
+            log::error!(
+                "Error inserting new user ({:?})into database: {}",
+                &u,&e,
+            );
+            return text_500(Some("Unable to insert User into database.".to_owned()));
+        }
+        if let Err(e) = glob.refresh_users().await {
+            log::error!(
+                "Error refreshing user hash from database: {}" ,&e
+            );
+            return text_500(Some("Unable to reread users from database.".to_owned()));
+        }
+    }
+
+    populate_admins(glob).await
 }

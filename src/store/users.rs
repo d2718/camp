@@ -253,7 +253,7 @@ impl Store {
     }
 
     /// Inserts the `user::BaseUser` information into the `users` table in the
-    /// database.
+    /// database and return the newly-generated salt.
     ///
     /// This is used by the `Store::insert_xxx()` methods to insert this part
     /// of the information. It also calls `check_existing_user_role()` and
@@ -264,7 +264,7 @@ impl Store {
         uname: &str,
         email: &str,
         role: Role,
-    ) -> Result<(), DbError> {
+    ) -> Result<String, DbError> {
         log::trace!(
             "insert_base_user( T, {:?}, {:?}, {} ) called.",
             uname, email, role
@@ -276,6 +276,8 @@ impl Store {
                 uname, &role
             )));
         }
+
+        let salt = self.generate_salt();
     
         t.execute(
             "INSERT INTO users (uname, role, salt, email)
@@ -283,46 +285,46 @@ impl Store {
             &[
                 &uname,
                 &role.to_string(),
-                &self.generate_salt(),
+                &salt,
                 &email,
             ]
         ).await?;
     
-        Ok(())
+        Ok(salt)
     }
 
     pub async fn insert_admin(
         &self,
         uname: &str,
         email: &str,
-    ) -> Result<(), DbError> {
+    ) -> Result<String, DbError> {
         log::trace!("Store::insert_admin( {:?},{:?} ) called.", uname, email);
 
         let mut client = self.connect().await?;
         let t = client.transaction().await?;
 
-        self.insert_base_user(&t, uname, email, Role::Admin).await?;
+        let salt = self.insert_base_user(&t, uname, email, Role::Admin).await?;
 
         t.commit().await?;
         log::trace!("Inserted Admin {:?} ({}).", uname, email);
-        Ok(())
+        Ok(salt)
     }
 
     pub async fn insert_boss(
         &self,
         uname: &str,
         email: &str,
-    ) -> Result<(), DbError> {
+    ) -> Result<String, DbError> {
         log::trace!("Store::insert_boss( {:?}, {:?} ) called.", uname, email);
 
         let mut client = self.connect().await?;
         let t = client.transaction().await?;
 
-        self.insert_base_user(&t, uname, email, Role::Boss).await?;
+        let salt = self.insert_base_user(&t, uname, email, Role::Boss).await?;
 
         t.commit().await?;
         log::trace!("Inserted Boss {:?} ({})", uname, email);
-        Ok(())
+        Ok(salt)
     }
 
     pub async fn insert_teacher(
@@ -330,7 +332,7 @@ impl Store {
         uname: &str,
         email: &str,
         name: &str,
-    ) -> Result<(), DbError> {
+    ) -> Result<String, DbError> {
         log::trace!(
             "Store::insert_teacher( {:?}, {:?}, {:?} ) called.",
             uname, email, name
@@ -339,7 +341,7 @@ impl Store {
         let mut client = self.connect().await?;
         let t = client.transaction().await?;
 
-        self.insert_base_user(&t, uname, email, Role::Teacher).await?;
+        let salt = self.insert_base_user(&t, uname, email, Role::Teacher).await?;
 
         t.execute(
             "INSERT INTO teachers (uname, name)
@@ -349,12 +351,14 @@ impl Store {
 
         t.commit().await?;
         log::trace!("Inserted Teacher {:?}, ({}, {})", uname, name, email);
-        Ok(())
+        Ok(salt)
     }
 
+    /// Insert the slice of supplied students into the database. On success,
+    /// the Student objects salts are set.
     pub async fn insert_students(
         &self,
-        students: &[Student]
+        students: &mut [Student]
     ) -> Result<usize, DbError> {
         log::trace!("Store::insert_students( [ {} students ] ) called.", students.len());
 
@@ -459,12 +463,13 @@ impl Store {
         We are also putting it in its own scope, so `inserts` will drop.
         */
         let mut n_base_inserted: u64 = 0;
+        let mut salts: Vec<String> = std::iter::repeat(())
+            .take(students.len())
+            .map(|_| self.generate_salt())
+            .collect();
         {
             let student_role = Role::Student.to_string();
-            let salts: Vec<String> = std::iter::repeat(())
-                .take(students.len())
-                .map(|_| self.generate_salt())
-                .collect();
+
             let pvec: Vec<[&(dyn ToSql + Sync); 4]> = students.iter()
                 .enumerate()
                 .map(|(n, s)| {
@@ -538,6 +543,10 @@ impl Store {
         }
 
         t.commit().await?;
+
+        for (stud, salt) in students.iter_mut().zip(salts.drain(..)) {
+            stud.base.salt = salt;
+        }
 
         log::trace!(
             "Inserted {} base users and {} student table rows.",
@@ -861,7 +870,7 @@ mod tests {
             std::io::Cursor::new(STUDENTS_CSV.as_bytes())
         ).unwrap();
         assert_eq!(
-            db.insert_students(&studs).await.unwrap(),
+            db.insert_students(&mut studs).await.unwrap(),
             studs.len()
         );
 

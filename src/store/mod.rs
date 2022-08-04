@@ -130,6 +130,10 @@ impl std::fmt::Display for DbError {
     }
 }
 
+impl From<DbError> for String {
+    fn from(val: DbError) -> Self { val.0 }
+}
+
 pub struct Store {
     connection_string: String,
     salt_chars: Vec<char>,

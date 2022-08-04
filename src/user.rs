@@ -3,7 +3,9 @@ Database users.
 */
 use std::io::Read;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Role {
     Admin,
     Boss,
@@ -40,7 +42,7 @@ impl std::str::FromStr for Role {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BaseUser {
     pub uname: String,
     pub role: Role,
@@ -77,13 +79,13 @@ impl BaseUser {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Teacher {
     pub base: BaseUser,
     pub name: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Student {
     pub base:BaseUser,
     /// Last name of the student.
@@ -219,7 +221,7 @@ impl Student {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum User {
     Admin(BaseUser),
     Boss(BaseUser),

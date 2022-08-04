@@ -35,3 +35,19 @@ input.tab-button ~ label {
 }
 input.tab-button:checked ~ label { background-color: #ddd; }
 input.tab-button:checked ~ div.tab-content { display: block; }
+
+table { border-collapse: collapse; }
+
+table.user-table { margin: 1em 0; }
+table.user-table th {
+    text-align: center;
+}
+table.user-table th,
+table.user-table td { padding: 0.5ex; }
+table.user-table tr:nth-child(even) > td {
+    background-color: #cdd;
+}
+
+button {
+    padding: 0.5ex;
+}

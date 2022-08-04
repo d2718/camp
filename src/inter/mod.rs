@@ -81,6 +81,8 @@ pub fn init<P: AsRef<Path>>(template_dir: P) -> Result<(), String> {
     let template_dir = template_dir.as_ref();
 
     let mut h = Handlebars::new();
+    #[cfg(debug_assertions)]
+    h.set_dev_mode(true);
     h.register_templates_directory(".html", template_dir)
         .map_err(|e| format!(
             "Error registering templates directory {}: {}",

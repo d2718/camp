@@ -117,6 +117,70 @@ pub struct Glob {
 impl Glob {
     pub fn auth(&self) -> Arc<RwLock<auth::Db>> { self.auth.clone() }
     pub fn data(&self) -> Arc<RwLock<Store>>    { self.data.clone() }
+
+    /// Retrieve all `User` data from the database and replace the contents
+    /// of the current `.users` map with it.
+    pub async fn refresh_users(&mut self) -> Result<(), String> {
+        log::trace!("Glob::refresh_users() called.");
+        let new_users = self.data.read().await.get_users().await
+            .map_err(|e| format!("Error retrieving users from Data DB: {}", &e))?;
+        self.users = new_users;
+        Ok(())
+    }
+
+    /// Retrieve all `Course` data from the database and replace the contents
+    /// of the current `.courses` map with it.
+    pub async fn refresh_courses(&mut self) -> Result<(), String> {
+        log::trace!("Glob::refresh_courses() called.");
+        let new_courses = self.data.read().await.get_courses().await
+            .map_err(|e| format!("Error retrieving course information from Data DB: {}", &e))?;
+        self.courses = new_courses;
+        Ok(())
+    }
+
+    /// Insert the given user into both the auth and the data databases.
+    /// 
+    /// This takes advantage of the fact that it's necessary to insert into
+    /// the data DB and get back a salt string before the user info can be
+    /// inserted into the auth DB.
+    /// 
+    /// XXX TODO XXX
+    /// 
+    ///   * Implement this for `User::Teacher` and `User::Student`.
+    ///   * Generate random passwords upon insertion.
+    /// 
+    pub async fn insert_user(&self, u: &User) -> Result<(), String> {
+        log::trace!("Glob::insert_user( {:?} ) called.", u);
+
+        let salt = match u {
+            User::Admin(base) => {
+                let data = self.data.read().await;
+                data.insert_admin(&base.uname, &base.email).await?
+            },
+            User::Boss(base) => {
+                let data = self.data.read().await;
+                data.insert_boss(&base.uname, &base.email).await?
+            },
+            user => {
+                let estr = format!("Insertion through Glob unimplemented for {}", user.role());
+                return Err(estr);
+            },
+        };
+
+        {
+            let auth = self.auth.read().await;
+            if let Err(e) = auth.add_user(
+                u.uname(),
+                "new_password",
+                &salt,
+            ).await {
+                self.data.read().await.delete_user(u.uname()).await?;
+                return Err(format!("Unable to insert new user: {}", &e));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Loads system configuration and ensures all appropriate database tables
@@ -220,25 +284,21 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob, String>
     }
     log::trace!("Default Admin OK in auth DB.");
 
-    log::trace!("Retrieving courses from data DB.");
-    let courses = data_db.get_courses().await
-        .map_err(|e| format!("Error retrieving courses from data DB: {}", &e))?;
-    log::info!("Retrieved {} courses from data DB.", &courses.len());
-    
-    log::trace!("Retrieving users from data DB.");
-    let users = data_db.get_users().await
-        .map_err(|e| format!("Error retrieving users from data DB: {}", &e))?;
-    log::info!("Retrieved {} users from data DB.", &users.len());
-
-    inter::init(&cfg.templates_dir)?;
-
-    let glob = Glob {
+    let mut glob = Glob {
         auth: Arc::new(RwLock::new(auth_db)),
         data: Arc::new(RwLock::new(data_db)),
-        courses,
-        users,
+        courses: HashMap::new(),
+        users: HashMap::new(),
         addr: cfg.addr,
     };
+
+    glob.refresh_courses().await?;
+    log::info!("Retrieved {} courses from data DB.", glob.courses.len());
+    
+    glob.refresh_users().await?;
+    log::info!("Retrieved {} users from data DB.", glob.users.len());
+
+    inter::init(&cfg.templates_dir)?;
 
     Ok(glob)
 }

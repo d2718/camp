@@ -16,7 +16,6 @@ use axum::{
 use serde_json::json;
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::RwLock;
-use tower::ServiceBuilder;
 use tower_http::{
     services::fs::{ServeDir, ServeFile},
 };

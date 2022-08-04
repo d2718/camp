@@ -26,7 +26,14 @@ const AUTH = {
     <div id="staff-tab-content" class="tab-content">
         <h2>Admins</h2>
         <div id="staff-admins">
-            <p>populating list of Admins...</p>
+            <table id="admin-table" class="user-table">
+                <thead><th>uname</th><th>email</th><th>actions</th></thead>
+                <tbody></tbody>
+            </table>
+
+            <div>
+                <button id="add-admin"><label>add Admin</label></button>
+            </div>
         </div>
         <h2>Bosses</h2>
         <div id="staff-bosses">
@@ -83,6 +90,11 @@ const AUTH = {
                 <label><img src="/static/dismiss.svg"></label>
             </button>
         </div>
+
+        <datalist id="admin-action-list">
+            <option value="email">change email</option>
+            <option value="delete">delete user</option>
+        </datalist>
 
     </body>
 </html>

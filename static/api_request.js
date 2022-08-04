@@ -58,17 +58,20 @@ RQ.error_dismiss.addEventListener("click",
     }
 );
 
-function request(uri, req_obj, description, on_success) {
+function api_request(req, description, on_success) {
     const rq_id = RQ.next_id();
 
-    req_obj.headers["x-camp-request-id"] = rq_id;
+    req.headers.set("x-camp-request-id", rq_id);
     // The AUTH object should be defined in a <SCRIPT> tag in the HTML template.
-    req_obj.headers["x-camp-uname"] = AUTH.uname;
-    req_obj.headers["x-camp-key"] = AUTH.key;
+    req.headers.set("x-camp-uname", AUTH.uname);
+    req.headers.set("x-camp-key", AUTH.key);
 
     RQ.add_pending(rq_id, description);
-    fetch(uri, req_obj)
-    .then(r => on_success(r))
+    fetch(req)
+    .then(r => {
+        console.log("api_request() returned result:", r);
+        on_success(r)
+    })
     .catch(console.log)
     .finally(x => RQ.remove_pending(rq_id));
 }
