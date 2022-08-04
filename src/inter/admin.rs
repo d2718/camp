@@ -52,6 +52,13 @@ pub async fn login(
         }
     };
 
+    let uname_header_value = match HeaderValue::try_from(&base.uname) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("uname unable to be converted into HTTP header value: {}", &e);
+            return html_500();
+        }
+    };
     let key_header_value = match HeaderValue::try_from(auth_key) {
         Ok(v) => v,
         Err(e) => {
@@ -63,10 +70,16 @@ pub async fn login(
     serve_static(
         StatusCode::OK,
         "static/admin.html",
-        vec![(
+        vec![
+            (
                 HeaderName::from_static("x-camp-key"),
                 key_header_value
-            )]
+            ),
+            (
+                HeaderName::from_static("x-camp-uname"),
+                uname_header_value
+            )
+        ]
     )
 }
 

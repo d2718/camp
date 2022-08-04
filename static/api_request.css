@@ -1,0 +1,26 @@
+div#progress,
+div#error {
+    display: none;
+    position: static;
+    width: 33vw;
+    min-width: 40ex;
+    border-width: 1ex;
+    border-radius: 1ex;
+    border-style: solid;
+}
+div#progress {
+    background-color: #abc;
+    border-color: #248;
+    bottom: 1em; right: 1em;
+}
+div#error {
+    background-color: #caa;
+    border-color: #822;
+    top: 1em; left: 1em;
+}
+div#progress img { width: 3em; }
+div#error img { width 3em; }
+div#progress ul,
+div#error > ul {
+    list-style-type: circle;
+}
