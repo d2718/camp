@@ -3,6 +3,8 @@
     box-sizing: border-box;
 }
 
+body { width: 100vw; }
+
 ul.tabs {
     display: flex;
     width: calc(100vw - 6em);
@@ -50,4 +52,38 @@ table.user-table tr:nth-child(even) > td {
 
 button {
     padding: 0.5ex;
+}
+
+dialog.edit {
+    position: fixed;
+    top: 1em; right: 1em;
+    background-color: #eee;
+    border: 1ex solid #888;
+    border-radius: 1ex;
+    padding: 1em;
+}
+dialog > h1 {
+    text-align: center;
+    font-size: 100%;
+    margin-bottom: 1em;
+}
+
+dialog > form {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1ex 1ex;
+}
+dialog > form > *:nth-child(odd) { justify-self: end; }
+dialog > form >*:nth-child(even) { justify-self: start; }
+
+input:invalid { background-color: #fcc; }
+input:valid { background-color: #cfc; }
+
+dialog#are-you-sure {
+    position: fixed;
+    top: 50vh; left: 50vw;
+    transform: translate(-50%, -50%);
+    background-color: #adf;
+    border: 1ex solid #268;
+    padding: 1em;
 }

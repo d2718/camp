@@ -181,6 +181,34 @@ impl Glob {
 
         Ok(())
     }
+
+    pub async fn update_user(&self, u: &User) -> Result<(), String> {
+        log::trace!("Glob::update_user( {:?} ) called.", u);
+
+        let data = self.data.read().await;
+        match u {
+            User::Admin(_) => {
+                data.update_admin(u.uname(), u.email()).await?;
+            },
+            User::Boss(_) => {
+                data.update_boss(u.uname(), u.email()).await?;
+            },
+            User::Teacher(t) => {
+                data.update_teacher(&t.base.uname, &t.base.email, &t.name).await?;
+            },
+            User::Student(_) => {
+                return Err(
+                    "Glob::update_user() is not yet implemented for Students.".to_owned()
+                );
+            },
+        }
+
+        Ok(())
+    }
+
+    pub async fn delete_user(&self, uname: &str) -> Result<(), String> {
+        
+    }
 }
 
 /// Loads system configuration and ensures all appropriate database tables

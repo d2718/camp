@@ -116,14 +116,13 @@ pub async fn api(
     };
 
     match action {
-        "populate-admins" => {
-            populate_admins(glob.clone()).await
-        },
-        x => {
-            respond_bad_request(
-                format!("{:?} is not a recognizable x-camp-action value.", x)
-            )
-        },
+        "populate-admins" => populate_admins(glob.clone()).await,
+        "add-user" => add_user(body, glob.clone()).await,
+        "update-user" => update_user(body, glob.clone()).await,
+        "delete-user" => delete_user(body, glob.clone()).await,
+        x => respond_bad_request(
+            format!("{:?} is not a recognizable x-camp-action value.", x)
+        ),
     }
 }
 
@@ -140,9 +139,27 @@ async fn populate_admins(glob: Arc<RwLock<Glob>>) -> Response {
         StatusCode::OK,
         [(
             HeaderName::from_static("x-camp-action"),
-            HeaderValue::from_static("populate-admins")
+            HeaderValue::from_static("populate-users")
         )],
         Json(admins),
+    ).into_response()
+}
+
+async fn populate_all(glob: Arc<RwLock<Glob>>) -> Response {
+    log::trace!("populate_all( Glob ) called.");
+
+    let glob = glob.read().await;
+    let users: Vec<&User> = glob.users.iter()
+        .map(|(_, u)| u)
+        .collect();
+    
+    (
+        StatusCode::OK,
+        [(
+            HeaderName::from_static("x-camp-action"),
+            HeaderValue::from_static("populate-users")
+        )],
+        Json(users),
     ).into_response()
 }
 
@@ -183,4 +200,77 @@ async fn add_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
     }
 
     populate_admins(glob).await
+}
+
+async fn update_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires a JSON body.".to_owned()
+        ); },
+    };
+
+    let u: User = match serde_json::from_str(&body) {
+        Ok(u) => u,
+        Err(e) => {
+            log::error!(
+                "Error deserializing JSON {:?} as BaseUser: {}",
+                &body, &e
+            );
+            return text_500(Some("Unable to deserialize User struct.".to_owned()));
+        },
+    };
+
+    {
+        let mut glob = glob.write().await;
+        if let Err(e) = glob.update_user(&u).await {
+            log::error!(
+                "Error updating user {:?}: {}", &u, &e,
+            );
+            return text_500(Some(e));
+        }
+        if let Err(e) = glob.refresh_users().await {
+            log::error!(
+                "Error refreshing user hash from database: {}" ,&e
+            );
+            return text_500(Some("Unable to reread users from database.".to_owned()));
+        }
+    }
+
+    match u.role() {
+        Role::Admin => populate_admins(glob).await,
+        x => (
+            StatusCode::NOT_IMPLEMENTED,
+            format!("Populating role {} not yet implemented.", &x)
+        ).into_response(),
+    }
+}
+
+async fn delete_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let uname = match body {
+        Some(uname) => uname,
+        None => { return respond_bad_request(
+            "Request must include the uname to delete as a body.".to_owned()
+        ); },
+    };
+
+    {
+        let glob = glob.read().await;
+        if let Err(e) = glob.data().read().await.delete_user(uname).await {
+            log::error!(
+                "Error deleting user {:?}: {}", uname, &e
+            );
+            return text_500(Some(e.to_string()));
+        }
+    }
+    {
+        if let Err(e) = glob.write().await.refresh_users().await {
+            log::error!(
+                "Error refreshing user hash from database: {}", &e
+            );
+            return text_500(Some("Unable to reread users from database.".to_owned()));
+        }
+    }
+
+    populate_all(glob).await
 }

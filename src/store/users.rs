@@ -293,6 +293,35 @@ impl Store {
         Ok(salt)
     }
 
+    async fn update_base_user(
+        &self,
+        t: &Transaction<'_>,
+        uname: &str,
+        email: &str,
+    ) -> Result<(), DbError> {
+        log::trace!(
+            "update_base_user( T, {:?}, {:?} ) called.",
+            uname, email
+        );
+
+        let n_updated = t.execute(
+            "UPDATE users SET email = $1 WHERE uname = $2",
+            &[&email, &uname]
+        ).await?;
+
+        if n_updated == 0 {
+            Err(DbError(format!("No extant user {:?}.", uname)))
+        } else if n_updated > 1 {
+            log::warn!(
+                "Store::update_base_user( T, {:?} ... ) updated more than 1 record!",
+                uname
+            );
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+
     pub async fn insert_admin(
         &self,
         uname: &str,
@@ -310,6 +339,20 @@ impl Store {
         Ok(salt)
     }
 
+    pub async fn update_admin(
+        &self,
+        uname: &str,
+        email: &str,
+    ) -> Result<(), DbError> {
+        log::trace!("update_admin( {:?}, {:?} ) called.", uname, email);
+
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+        self.update_base_user(&t, uname, email).await?;
+        t.commit().await?;
+        Ok(())
+    }
+
     pub async fn insert_boss(
         &self,
         uname: &str,
@@ -325,6 +368,20 @@ impl Store {
         t.commit().await?;
         log::trace!("Inserted Boss {:?} ({})", uname, email);
         Ok(salt)
+    }
+
+    pub async fn update_boss(
+        &self,
+        uname: &str,
+        email: &str,
+    ) -> Result<(), DbError> {
+        log::trace!("update_admin( {:?}, {:?} ) called.", uname, email);
+
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+        self.update_base_user(&t, uname, email).await?;
+        t.commit().await?;
+        Ok(())
     }
 
     pub async fn insert_teacher(
@@ -352,6 +409,42 @@ impl Store {
         t.commit().await?;
         log::trace!("Inserted Teacher {:?}, ({}, {})", uname, name, email);
         Ok(salt)
+    }
+
+    pub async fn update_teacher(
+        &self,
+        uname: &str,
+        email: &str,
+        name: &str,
+    ) -> Result<(), DbError> {
+        log::trace!(
+            "Store::update_teacher( {:?}, {:?}, {:?} ) called.",
+            uname, email, name
+        );
+
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+
+        self.update_base_user(&t, uname, email).await?;
+
+        let n_updated = t.execute(
+            "UPDATE teachers SET name = $1 WHERE uname = $2",
+            &[&name, &uname]
+        ).await?;
+
+        if n_updated == 0 {
+            return Err(DbError(format!(
+                "{:?} has no entry in the 'teachers' table.", uname
+            )));
+        } else if n_updated > 1 {
+            log::warn!(
+                "User {:?} has {} entries in the 'teachers' table.",
+                uname, &n_updated
+            );
+        }
+
+        t.commit().await?;
+        Ok(())
     }
 
     /// Insert the slice of supplied students into the database. On success,
@@ -912,6 +1005,67 @@ mod tests {
 
         for (uname, _, _) in TEACHERS.iter() {
             db.delete_user(uname).await.unwrap();
+        }
+
+        db.nuke_database().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn alter_users() {
+        ensure_logging();
+
+        const NEW_EMAIL: &str = "new@nowhere.org";
+        const NEW_NAME: &str = "Teachy McTeacherson";
+
+        let db = Store::new(TEST_CONNECTION.to_owned());
+        db.ensure_db_schema().await.unwrap();
+
+        db.insert_boss(BOSSES[0].0, BOSSES[0].1).await.unwrap();
+        db.insert_teacher(
+            TEACHERS[0].0, TEACHERS[0].1, TEACHERS[0].2
+        ).await.unwrap();
+
+        let mut umap = db.get_users().await.unwrap();
+
+        let u = umap.remove(BOSSES[0].0).unwrap();
+        assert_eq!(
+            (BOSSES[0].0, BOSSES[0].1, Role::Boss),
+            (u.uname(), u.email(), u.role())
+        );
+        db.update_boss(u.uname(), NEW_EMAIL).await.unwrap();
+
+        let u = umap.remove(TEACHERS[0].0).unwrap();
+        assert_eq!(
+            (TEACHERS[0].0, TEACHERS[0].1, Role::Teacher),
+            (u.uname(), u.email(), u.role())
+        );
+        if let User::Teacher(t) = u {
+            assert_eq!(TEACHERS[0].2, &t.name);
+            db.update_teacher(&t.base.uname, NEW_EMAIL, NEW_NAME)
+                .await.unwrap();
+        } else {
+            panic!("User is not a teacher.");
+        }
+        
+
+        umap  = db.get_users().await.unwrap();
+        
+        let u = umap.remove(BOSSES[0].0).unwrap();
+        assert_eq!(
+            (BOSSES[0].0, NEW_EMAIL, Role::Boss),
+            (u.uname(), u.email(), u.role())
+        );
+
+        let u = umap.remove(TEACHERS[0].0).unwrap();
+        assert_eq!(
+            (TEACHERS[0].0, NEW_EMAIL, Role::Teacher),
+            (u.uname(), u.email(), u.role())
+        );
+        if let User::Teacher(t) = u {
+            assert_eq!(NEW_NAME, &t.name);
+        } else {
+            panic!("User is not a teacher.");
         }
 
         db.nuke_database().await.unwrap();

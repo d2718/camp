@@ -4,24 +4,26 @@ div#error {
     position: fixed;
     flex-wrap: nowrap;
     align-items: center;
-    width: 33vw;
-    min-width: 40ex;
+    width: 50vw;
+    min-width: 60ex;
+    max-width: 100ex;
     border-width: 1ex;
     border-radius: 1ex;
     border-style: solid;
-    z-index: 2;
 }
 div#progress {
     justify-content: flex-start;
     background-color: #abc;
     border-color: #248;
     bottom: 1em; right: 1em;
+    z-index: 2;
 }
 div#error {
     justify-content: space-between;
     background-color: #fca;
     border-color: #820;
     top: 1em; left: 1em;
+    z-index: 5;
 }
 div#progress > *,
 div#error > * { margin: 1em; }
