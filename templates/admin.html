@@ -37,7 +37,14 @@ const AUTH = {
         </div>
         <h2>Bosses</h2>
         <div id="staff-bosses">
-            <p>populating list of Bosses...</p>
+            <table id="boss-table" class="user-table">
+                <thead><th>uname</th><th>email</th><th>actions</th></thead>
+                <tbody></tbody>
+            </table>
+
+            <div>
+                <button id="add-boss"><label>add Boss</label></button>
+            </div>
         </div><h2>Teachers</h2>
         <div id="staff-teachers">
             <p>populating list of Teachers...</p>
@@ -114,7 +121,29 @@ const AUTH = {
             </form>
             <hr>
             <button id="delete-admin">
-                <label>delete this admin</label>
+                <label>delete this Admin</label>
+            </button>
+        </dialog>
+        
+        <dialog id="alter-boss" class="edit">
+            <h1>Boss Details</h1>
+            <form name="alter-boss", method="dialog">
+                <label for="alter-boss-uname">uname</label>
+                <input name="uname" id="alter-boss-uname"
+                       required pattern="^[a-zA-Z0-9]+$">
+                <label for="alter-boss-email">email</label>
+                <input type="email" name="email" id="alter-boss-email"
+                       required>
+                <button id="alter-boss-cancel">
+                    <label>cancel</label>
+                </button>
+                <button id="alter-boss-confirm">
+                    <label>confirm</label>
+                </button>
+            </form>
+            <hr>
+            <button id="delete-boss">
+                <label>delete this Boss</label>
             </button>
         </dialog>
 

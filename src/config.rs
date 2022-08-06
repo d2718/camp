@@ -207,7 +207,18 @@ impl Glob {
     }
 
     pub async fn delete_user(&self, uname: &str) -> Result<(), String> {
-        
+        log::trace!("Glob::delete_user( {:?} ) called.", uname);
+
+        {
+            let data = self.data.read().await;
+            data.delete_user(uname).await?;
+        }
+        {
+            let auth = self.auth.read().await;
+            auth.delete_users(&[uname]).await?;
+        }
+
+        Ok(())
     }
 }
 

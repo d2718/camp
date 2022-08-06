@@ -80,6 +80,10 @@ impl std::fmt::Display for DbError {
     }
 }
 
+impl From<DbError> for String {
+    fn from(val: DbError) -> Self { val.0 }
+}
+
 /**
 Possible results of attempting to authenticate with the database.
 */

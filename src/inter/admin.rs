@@ -116,7 +116,9 @@ pub async fn api(
     };
 
     match action {
-        "populate-admins" => populate_admins(glob.clone()).await,
+        "populate-users" => populate_users(glob.clone()).await,
+        "populate-admins" => populate_role(glob.clone(), Role::Admin).await,
+        "populate-bosses" => populate_role(glob.clone(), Role::Boss).await,
         "add-user" => add_user(body, glob.clone()).await,
         "update-user" => update_user(body, glob.clone()).await,
         "delete-user" => delete_user(body, glob.clone()).await,
@@ -126,13 +128,13 @@ pub async fn api(
     }
 }
 
-async fn populate_admins(glob: Arc<RwLock<Glob>>) -> Response {
-    log::trace!("populate_admins( Glob ) called.");
+async fn populate_role(glob: Arc<RwLock<Glob>>, role: Role) -> Response {
+    log::trace!("populate_role( Glob, {:?} ) called.", &role);
 
     let glob = glob.read().await;
-    let admins: Vec<&User> = glob.users.iter()
+    let users: Vec<&User> = glob.users.iter()
         .map(|(_, u)| u)
-        .filter(|&u| u.role() == Role::Admin)
+        .filter(|&u| u.role() == role)
         .collect();
 
     (
@@ -141,11 +143,11 @@ async fn populate_admins(glob: Arc<RwLock<Glob>>) -> Response {
             HeaderName::from_static("x-camp-action"),
             HeaderValue::from_static("populate-users")
         )],
-        Json(admins),
+        Json(users),
     ).into_response()
 }
 
-async fn populate_all(glob: Arc<RwLock<Glob>>) -> Response {
+async fn populate_users(glob: Arc<RwLock<Glob>>) -> Response {
     log::trace!("populate_all( Glob ) called.");
 
     let glob = glob.read().await;
@@ -199,7 +201,8 @@ async fn add_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
         }
     }
 
-    populate_admins(glob).await
+    //populate_role(glob, u.role()).await
+    populate_users(glob).await
 }
 
 async fn update_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
@@ -237,13 +240,8 @@ async fn update_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response 
         }
     }
 
-    match u.role() {
-        Role::Admin => populate_admins(glob).await,
-        x => (
-            StatusCode::NOT_IMPLEMENTED,
-            format!("Populating role {} not yet implemented.", &x)
-        ).into_response(),
-    }
+    //populate_role(glob, u.role()).await
+    populate_users(glob).await
 }
 
 async fn delete_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
@@ -256,7 +254,7 @@ async fn delete_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response 
 
     {
         let glob = glob.read().await;
-        if let Err(e) = glob.data().read().await.delete_user(uname).await {
+        if let Err(e) = glob.delete_user(&uname).await {
             log::error!(
                 "Error deleting user {:?}: {}", uname, &e
             );
@@ -272,5 +270,5 @@ async fn delete_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response 
         }
     }
 
-    populate_all(glob).await
+    populate_users(glob).await
 }

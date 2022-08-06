@@ -20,20 +20,13 @@ const DISPLAY = {
     confirm: document.getElementById("are-you-sure"),
     confirm_message: document.querySelector("dialog#are-you-sure > p"),
     admin_tbody: document.querySelector("table#admin-table > tbody"),
-    admin_edit: document.getElementById("alter-admin"),
-    boss_tbody: null,
+    admin_edit:  document.getElementById("alter-admin"),
+    boss_tbody:  document.querySelector("table#boss-table > tbody"),
+    boss_edit:   document.getElementById("alter-boss"),
     teacher_tbody: null,
     student_tbody: null,
 };
 
-/* const MISC = {
-    role_to_table_id: new Map([
-        ["Admin", DISPLAY.admin_tbody],
-        ["Boss", DISPLAY.boss_tbody],
-        ["Teacher", DISPLAY.teacher_tbody],
-        ["Student", DISPLAY.student_tbody]
-    ]),
-} */
 function set_text(elt, text) {
     recursive_clear(elt);
     elt.appendChild(document.createTextNode(text));
@@ -55,6 +48,21 @@ function label(text, elt) {
     } else {
         return lab;
     }
+}
+
+async function are_you_sure(question) {
+    set_text(DISPLAY.confirm_message, question);
+    DISPLAY.confirm.showModal();
+    const p = new Promise((resolve, _) => {
+        DISPLAY.confirm.onclose = () => {
+            if(DISPLAY.confirm.returnValue == "ok") {
+                resolve(true);
+            } else {
+                resolve(false);
+            }
+        }
+    });
+    return p;
 }
 
 /*
@@ -81,6 +89,23 @@ function add_user_to_display(u) {
         tr.appendChild(td);
 
         DISPLAY.admin_tbody.appendChild(tr);
+    } else if(u.Boss) {
+        const v = u.Boss;
+        DATA.users.set(v.uname, u);
+
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-uname", v.uname);
+        tr.appendChild(text_td(v.uname));
+        tr.appendChild(text_td(v.email));
+        const td = document.createElement("button");
+        const ebutt = document.createElement("button");
+        label("edit", ebutt);
+        ebutt.setAttribute("data-uname", v.uname);
+        ebutt.addEventListener("click", edit_boss);
+        td.appendChild(ebutt);
+        tr.appendChild(td);
+
+        DISPLAY.boss_tbody.appendChild(tr);
     } else {
         console.log("add_user_to_display() not implemented for", u);
     }
@@ -94,19 +119,23 @@ function populate_users(r) {
 
         // Iterate through users once to determine which types are included
         // and thus which user tables need clearing.
-        const repopulate = new Set();
+/*         const repopulate = new Set();
         for (const u of j) {
             if(u.Admin)        { repopulate.add(DISPLAY.admin_tbody); }
-            else if(u.Boss)    { reponpulate.add(DISPLAY.boss_tbody); }
+            else if(u.Boss)    { repopulate.add(DISPLAY.boss_tbody); }
             else if(u.Teacher) { repopulate.add(DISPLAY.teacher_tbody); }
             else if(u.Student) { repopulate.add(DISPLAY.student_tbody); }
             else { console.log ("User has unknown type:", u); }
         }
         for(const elt of repopulate) {
             recursive_clear(elt);
-        }
+        } */
 
-        // Now iterate again and add each User.
+        DATA.users = new Map();
+        recursive_clear(DISPLAY.admin_tbody);
+        recursive_clear(DISPLAY.boss_tbody);
+        //recursive_clear(DISPLAY.teacher_tbody);
+        //recursive_clear(DISPLAY.student_tbody);
         for(const u of j) {
             add_user_to_display(u);
         }
@@ -182,7 +211,7 @@ PAGE LOAD SECTION
 */
 
 function populate_all(_evt) {
-    request_action("populate-admins", "Populating Admins...");
+    request_action("populate-users", "Populating Admins...");
 }
 
 if(document.readyState == "complete") {
@@ -278,25 +307,110 @@ document.getElementById("alter-admin-cancel")
 document.getElementById("alter-admin-confirm")
     .addEventListener("click", edit_admin_submit);
 
-function delete_admin(uname) {
-    api_request("delete-user", uname, `Deleting ${uname}...`)
-    DISPLAY.admin_edit.close();
-}
-
-function delete_admin_submit(evt) {
+async function delete_admin_submit(evt) {
     const uname = this.getAttribute("data-uname");
-    set_text(
-        DISPLAY.confirm_message,
-        `Are you sure you want to delete Admin ${uname}?`
-    );
-    DISPLAY.confirm.onclose = () => {
-        console.log(DISPLAY.confirm.returnValue);
-        if(DISPLAY.confirm.returnValue == "ok") {
-            delete_admin(uname);
-        }
-    };
-    DISPLAY.confirm.showModal();
+    const q = `Are you sure you want to delete Admin ${uname}?`;
+    if(await are_you_sure(q)) {
+        DISPLAY.admin_edit.close();
+        request_action("delete-user", uname, `Deleting ${uname}...`);
+    }
 }
 
 document.getElementById("delete-admin")
     .addEventListener("click", delete_admin_submit)
+
+
+/*
+For editing current or adding new Bosses.
+
+(Much of what follows is essential identical to the above section
+on adding/altering Admins.)
+
+If editing a current Boss, the `uname` input will be disabled.
+This both prevents the uname from being changed (unames should
+never be changed) and also signals the difference between adding
+new and updating existing users.
+*/
+function edit_boss(evt) {
+    const uname = this.getAttribute("data-uname");
+    const form = document.forms['alter-boss'];
+    document.getElementById("delete-boss")
+        .setAttribute("data-uname", uname);
+
+    if(uname) {
+        const u = DATA.users.get(uname)['Boss'];
+        form.elements['uname'].value = u.uname;
+        form.elements['uname'].disabled = true;
+        form.elements['email'].value = u.email;
+    } else {
+        form.elements['uname'].disabled = false;
+        for(const ipt of form.elements) {
+            ipt.value = "";
+        }
+    }
+
+    DISPLAY.boss_edit.showModal();
+}
+
+// We add this functionality to the "add Admin" button.
+document.getElementById("add-boss").addEventListener("click", edit_boss);
+
+/*
+Performs some cursory validation and submits the updated Admin info to
+the server.
+
+Requests either "update-user" or "add-user" depending on whether the
+`uname` input in the `alter-admin` form is diabled or not.
+
+Will throw an error and prevent the dialog from closing if
+form data pseudovalidation fails.
+*/
+function edit_boss_submit() {
+    const form = document.forms['alter-boss'];
+    const data = new FormData(form);
+    /*  The FormData() constructor skips disabled inputs, so we need to
+        manually ensure the `uname` value is in there. */
+    const uname_input = form.elements['uname'];
+    data.set("uname", uname_input.value);
+
+    const uname = data.get("uname") || "";
+    let email = data.get("email") || "";
+    email = email.trim();
+
+    const u = {
+        "Boss": {
+            "uname": uname,
+            "email": email,
+            "role": "Boss",
+            "salt": "",
+        }
+    };
+
+    DISPLAY.boss_edit.close();
+    if(uname_input.disabled) {
+        request_action("update-user", u, `Updating user ${uname}...`);
+    } else {
+        request_action("add-user", u, `Adding user ${uname}...`);
+    }
+}
+
+// The "cancel" <button> should close the dialog but not try to submit the form.
+document.getElementById("alter-boss-cancel")
+    .addEventListener("click", (evt) => {
+        evt.preventDefault();
+        DISPLAY.boss_edit.close();
+    });
+document.getElementById("alter-boss-confirm")
+    .addEventListener("click", edit_boss_submit);
+
+async function delete_boss_submit(evt) {
+    const uname = this.getAttribute("data-uname");
+    const q = `Are you sure you want to delete Boss ${uname}?`;
+    if(await are_you_sure(q)) {
+        DISPLAY.boss_edit.close();
+        request_action("delete-user", uname, `Deleting ${uname}...`);
+    }
+}
+
+document.getElementById("delete-boss")
+    .addEventListener("click", delete_boss_submit);
