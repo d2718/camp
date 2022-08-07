@@ -47,11 +47,14 @@ const AUTH = {
             </div>
         </div><h2>Teachers</h2>
         <div id="staff-teachers">
-            <p>populating list of Teachers...</p>
-        </div>
+            <table id="teacher-table" class="user-table">
+                <thead><th>uname</th><th>email</th><th>name</th><th>actions</th></thead>
+                <tbody></tbody>
+            </table>
 
-        <div id="debug">
-            <button id="push-me"><label>poosh mii</label></button>
+            <div>
+                <button id="add-teacher"><label>add Teacher</label></button>
+            </div>
         </div>
 
     </div>
@@ -65,7 +68,17 @@ const AUTH = {
     <div id="student-tab-content" class="tab-content">
         <h2>Students</h2>
         <div id="students">
-            <p>populating students...</p>
+            <table id="student-table" class="user-table">
+                <thead>
+                    <th>uname</th><th>name</th><th>teacher</th>
+                    <th>email</th><th>parent email</th><th>actions</th>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <div>
+                <button id="add-student"><label>add one Student</label></button>
+            </div>
         </div>
     </div>
 </li>
@@ -120,9 +133,11 @@ const AUTH = {
                 </button>
             </form>
             <hr>
-            <button id="delete-admin">
-                <label>delete this Admin</label>
-            </button>
+            <div class="center">
+                <button id="delete-admin">
+                    <label>delete this Admin</label>
+                </button>
+            </div>
         </dialog>
         
         <dialog id="alter-boss" class="edit">
@@ -142,9 +157,70 @@ const AUTH = {
                 </button>
             </form>
             <hr>
-            <button id="delete-boss">
-                <label>delete this Boss</label>
-            </button>
+            <div class="center">
+                <button id="delete-boss">
+                    <label>delete this Boss</label>
+                </button>
+            </div>
+        </dialog>
+
+        <dialog id="alter-teacher" class="edit">
+            <h1>Teacher Details</h1>
+            <form name="alter-teacher" method="dialog">
+                <label for="alter-teacher-uname">uname</label>
+                <input name="uname" id="alter-teacher-uname"
+                       required pattern="^[a-zA-Z0-9]+$">
+                <label for="alter-teacher-email">email</label>
+                <input type="email" name="email" id="alter-teacher-email"
+                       required>
+                <label for="alter-teacher-name">name</label>
+                <input name="name" id="alter-teacher-name" required>
+                <button id="alter-teacher-cancel">
+                    <label>cancel</label>
+                </button>
+                <button id="alter-teacher-confirm">
+                    <label>confirm</label>
+                </button>
+            </form>
+            <hr>
+            <div class="center">
+                <button id="delete-teacher">
+                    <label>delete this Teacher</label>
+                </button>
+            </div>
+        </dialog>
+
+        <dialog id="alter-student" class="edit">
+            <h1>Student Details</h1>
+            <form name="alter-student" method="dialog">
+                <label for="alter-student-uname">uname</label>
+                <input name="uname" id="alter-student-uname"
+                       required pattern="^[a-zA-Z0-9]+$">
+                <label for="alter-student-last">last</label>
+                <input name="last" id="alter-student-last" required>
+                <label for="alter-student-rest">rest</label>
+                <input name="rest" id="alter-student-rest" required>
+                <label for="alter-student-teacher">teacher</label>
+                <select name="teacher" id="alter-student-teacher" required></select>
+                <label for="alter-student-email">email</label>
+                <input type="email" name="email" id="alter-student-email"
+                       required>
+                <label for="alter-student-parent">parent email</label>
+                <input type="email" name="parent" id="alter-student-parent"
+                       required>
+                <button id="alter-student-cancel">
+                    <label>cancel</label>
+                </button>
+                <button id="alter-student-confirm">
+                    <label>confirm</label>
+                </button>
+            </form>
+            <hr>
+            <div class="center">
+                <button id="delete-student">
+                    <label>delete this Student</label>
+                </button>
+            </div>
         </dialog>
 
         <dialog id="are-you-sure">

@@ -191,7 +191,9 @@ async fn add_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
                 "Error inserting new user ({:?})into database: {}",
                 &u,&e,
             );
-            return text_500(Some("Unable to insert User into database.".to_owned()));
+            return text_500(Some(
+                format!("Unable to insert User into database: {}", &e)
+            ));
         }
         if let Err(e) = glob.refresh_users().await {
             log::error!(

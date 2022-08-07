@@ -1,0 +1,98 @@
+Debug:
+Admin(
+    BaseUser {
+        uname: "aguy",
+        role: Admin,
+        salt: "asdf",
+        email: "guy@dude.net",
+    },
+)
+Boss(
+    BaseUser {
+        uname: "aguy",
+        role: Boss,
+        salt: "asdf",
+        email: "guy@dude.net",
+    },
+)
+Teacher(
+    Teacher {
+        base: BaseUser {
+            uname: "aguy",
+            role: Teacher,
+            salt: "asdf",
+            email: "guy@dude.net",
+        },
+        name: "Alfred Guy",
+    },
+)
+Student(
+    Student {
+        base: BaseUser {
+            uname: "aguy",
+            role: Student,
+            salt: "asdf",
+            email: "guy@dude.net",
+        },
+        last: "Guy",
+        rest: "Alfred C.",
+        teacher: "mrt",
+        parent: "old.guy@gmail.com",
+        fall_exam: None,
+        spring_exam: None,
+        fall_exam_fraction: 0.2,
+        spring_exam_fraction: 0.2,
+        fall_notices: 0,
+        spring_notices: 0,
+    },
+)
+
+
+serde_json:
+{
+  "Admin": {
+    "uname": "aguy",
+    "role": "Admin",
+    "salt": "asdf",
+    "email": "guy@dude.net"
+  }
+}
+{
+  "Boss": {
+    "uname": "aguy",
+    "role": "Boss",
+    "salt": "asdf",
+    "email": "guy@dude.net"
+  }
+}
+{
+  "Teacher": {
+    "base": {
+      "uname": "aguy",
+      "role": "Teacher",
+      "salt": "asdf",
+      "email": "guy@dude.net"
+    },
+    "name": "Alfred Guy"
+  }
+}
+{
+  "Student": {
+    "base": {
+      "uname": "aguy",
+      "role": "Student",
+      "salt": "asdf",
+      "email": "guy@dude.net"
+    },
+    "last": "Guy",
+    "rest": "Alfred C.",
+    "teacher": "mrt",
+    "parent": "old.guy@gmail.com",
+    "fall_exam": null,
+    "spring_exam": null,
+    "fall_exam_fraction": 0.2,
+    "spring_exam_fraction": 0.2,
+    "fall_notices": 0,
+    "spring_notices": 0
+  }
+}

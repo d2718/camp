@@ -4,6 +4,7 @@
 }
 
 body { width: 100vw; }
+div.center { text-align: center; }
 
 ul.tabs {
     display: flex;
@@ -45,7 +46,8 @@ table.user-table th {
     text-align: center;
 }
 table.user-table th,
-table.user-table td { padding: 0.5ex; }
+table.user-table td { padding: 0.5ex 1ex;; }
+table.user-table td { font-family: monospace; }
 table.user-table tr:nth-child(even) > td {
     background-color: #cdd;
 }
@@ -86,4 +88,8 @@ dialog#are-you-sure {
     background-color: #adf;
     border: 1ex solid #268;
     padding: 1em;
+}
+dialog#are-you-sure > form {
+    display: flex;
+    justify-content: space-evenly;
 }

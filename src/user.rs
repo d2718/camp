@@ -51,10 +51,21 @@ pub struct BaseUser {
 }
 
 impl BaseUser {
-    pub fn into_admin(self) -> User { User::Admin(self) }
-    pub fn into_boss(self) -> User { User::Boss(self) }
+    fn rerole(self, role: Role) -> BaseUser {
+        BaseUser {
+            uname: self.uname,
+            role,
+            salt: self.salt,
+            email: self.email,
+        }
+    }
+    pub fn into_admin(self) -> User {
+        User::Admin(self.rerole(Role::Admin))
+    }
+    pub fn into_boss(self) -> User {
+        User::Boss(self.rerole(Role::Boss)) }
     pub fn into_teacher(self, name: String) -> User {
-        User::Teacher(Teacher { base: self, name })
+        User::Teacher(Teacher { base: self.rerole(Role::Teacher), name })
     }
     pub fn into_student(
         self,
@@ -70,7 +81,8 @@ impl BaseUser {
         spring_notices: i16,
     ) -> User {
         let s = Student {
-            base: self, last, rest, teacher, parent,
+            base: self.rerole(Role::Student),
+            last, rest, teacher, parent,
             fall_exam, spring_exam,
             fall_exam_fraction, spring_exam_fraction,
             fall_notices, spring_notices,
@@ -278,5 +290,48 @@ mod tests {
         let f = std::fs::File::open("test/good_students_0.csv").unwrap();
         let studs = Student::vec_from_csv_reader(f).unwrap();
         log::trace!("Students:\n{:#?}", &studs);
+    }
+
+    #[test]
+    fn make_serialized() {
+        use std::io::Write;
+        use serde_json::to_writer_pretty;
+        
+        let base = BaseUser {
+            uname: "aguy".to_owned(),
+            role: Role::Admin,
+            salt: "asdf".to_owned(),
+            email: "guy@dude.net".to_owned(),
+        };
+
+        let a = base.clone().into_admin();
+        let b = base.clone().into_boss();
+        let t = base.clone().into_teacher("Alfred Guy".to_owned());
+        let s = base.clone().into_student(
+            "Guy".to_owned(),
+            "Alfred C.".to_owned(),
+            "mrt".to_owned(),
+            "old.guy@gmail.com".to_owned(),
+            None, None, 0.2, 0.2, 0, 0
+        );
+
+        println!(
+            "Debug:\n{:#?}\n{:#?}\n{:#?}\n{:#?}\n\n",
+            &a, &b, &t, &s
+        );
+
+        let mut buff: Vec<u8> = Vec::new();
+        buff.extend_from_slice(b"serde_json:\n");
+        to_writer_pretty(&mut buff, &a).unwrap();
+        buff.push(b'\n');
+        to_writer_pretty(&mut buff, &b).unwrap();
+        buff.push(b'\n');
+        to_writer_pretty(&mut buff, &t).unwrap();
+        buff.push(b'\n');
+        to_writer_pretty(&mut buff, &s).unwrap();
+        buff.push(b'\n');
+        let buff = String::from_utf8(buff).unwrap();
+
+        println!("{}", &buff);
     }
 }

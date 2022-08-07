@@ -19,12 +19,14 @@ const DATA = {
 const DISPLAY = {
     confirm: document.getElementById("are-you-sure"),
     confirm_message: document.querySelector("dialog#are-you-sure > p"),
-    admin_tbody: document.querySelector("table#admin-table > tbody"),
-    admin_edit:  document.getElementById("alter-admin"),
-    boss_tbody:  document.querySelector("table#boss-table > tbody"),
-    boss_edit:   document.getElementById("alter-boss"),
-    teacher_tbody: null,
-    student_tbody: null,
+    admin_tbody:   document.querySelector("table#admin-table > tbody"),
+    admin_edit:    document.getElementById("alter-admin"),
+    boss_tbody:    document.querySelector("table#boss-table > tbody"),
+    boss_edit:     document.getElementById("alter-boss"),
+    teacher_tbody: document.querySelector("table#teacher-table > tbody"),
+    teacher_edit:  document.getElementById("alter-teacher"),
+    student_tbody: document.querySelector("table#student-table > tbody"),
+    student_edit:  document.getElementById("alter-student"),
 };
 
 function set_text(elt, text) {
@@ -48,6 +50,15 @@ function label(text, elt) {
     } else {
         return lab;
     }
+}
+function make_edit_button_td(uname, edit_func) {
+    const butt = document.createElement("button");
+    butt.setAttribute("data-uname", uname);
+    label("edit", butt);
+    butt.addEventListener("click", edit_func);
+    const td = document.createElement("td");
+    td.appendChild(butt);
+    return td;
 }
 
 async function are_you_sure(question) {
@@ -80,15 +91,10 @@ function add_user_to_display(u) {
         tr.setAttribute("data-uname", v.uname);
         tr.appendChild(text_td(v.uname));
         tr.appendChild(text_td(v.email));
-        const td = document.createElement("td");
-        const ebutt = document.createElement("button");
-        label("edit", ebutt);
-        ebutt.setAttribute("data-uname", v.uname);
-        ebutt.addEventListener("click", edit_admin);
-        td.appendChild(ebutt);
-        tr.appendChild(td);
+        tr.appendChild(make_edit_button_td(v.uname, edit_admin));
 
         DISPLAY.admin_tbody.appendChild(tr);
+
     } else if(u.Boss) {
         const v = u.Boss;
         DATA.users.set(v.uname, u);
@@ -97,15 +103,39 @@ function add_user_to_display(u) {
         tr.setAttribute("data-uname", v.uname);
         tr.appendChild(text_td(v.uname));
         tr.appendChild(text_td(v.email));
-        const td = document.createElement("button");
-        const ebutt = document.createElement("button");
-        label("edit", ebutt);
-        ebutt.setAttribute("data-uname", v.uname);
-        ebutt.addEventListener("click", edit_boss);
-        td.appendChild(ebutt);
-        tr.appendChild(td);
+        tr.appendChild(make_edit_button_td(v.uname, edit_boss));
 
         DISPLAY.boss_tbody.appendChild(tr);
+
+    } else if(u.Teacher) {
+        const v = u.Teacher.base;
+        DATA.users.set(v.uname, u);
+
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-uname", v.uname);
+        tr.appendChild(text_td(v.uname));
+        tr.appendChild(text_td(v.email));
+        tr.appendChild(text_td(u.Teacher.name));
+        tr.appendChild(make_edit_button_td(v.uname, edit_teacher));
+
+        DISPLAY.teacher_tbody.appendChild(tr);
+    
+    } else if(u.Student) {
+        const v = u.Student.base;
+        const s = u.Student;
+        DATA.users.set(v.uname, u);
+
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-uname", v.uname);
+        tr.appendChild(text_td(v.uname));
+        tr.appendChild(text_td(`${s.last}, ${s.rest}`));
+        tr.appendChild(text_td(s.teacher));
+        tr.appendChild(text_td(v.email));
+        tr.appendChild(text_td(s.parent));
+        tr.appendChild(make_edit_button_td(v.uname, edit_student));
+
+        DISPLAY.student_tbody.appendChild(tr);
+
     } else {
         console.log("add_user_to_display() not implemented for", u);
     }
@@ -117,25 +147,11 @@ function populate_users(r) {
         console.log("populate-users response:")
         console.log(j);
 
-        // Iterate through users once to determine which types are included
-        // and thus which user tables need clearing.
-/*         const repopulate = new Set();
-        for (const u of j) {
-            if(u.Admin)        { repopulate.add(DISPLAY.admin_tbody); }
-            else if(u.Boss)    { repopulate.add(DISPLAY.boss_tbody); }
-            else if(u.Teacher) { repopulate.add(DISPLAY.teacher_tbody); }
-            else if(u.Student) { repopulate.add(DISPLAY.student_tbody); }
-            else { console.log ("User has unknown type:", u); }
-        }
-        for(const elt of repopulate) {
-            recursive_clear(elt);
-        } */
-
         DATA.users = new Map();
         recursive_clear(DISPLAY.admin_tbody);
         recursive_clear(DISPLAY.boss_tbody);
-        //recursive_clear(DISPLAY.teacher_tbody);
-        //recursive_clear(DISPLAY.student_tbody);
+        recursive_clear(DISPLAY.teacher_tbody);
+        recursive_clear(DISPLAY.student_tbody);
         for(const u of j) {
             add_user_to_display(u);
         }
@@ -210,6 +226,8 @@ PAGE LOAD SECTION
 
 */
 
+console.log(DISPLAY);
+
 function populate_all(_evt) {
     request_action("populate-users", "Populating Admins...");
 }
@@ -238,19 +256,21 @@ new and updating existing users.
 function edit_admin(evt) {
     const uname = this.getAttribute("data-uname");
     const form = document.forms['alter-admin'];
-    document.getElementById("delete-admin")
-        .setAttribute("data-uname", uname);
+    const del = document.getElementById("delete-admin")
+    del.setAttribute("data-uname", uname);
 
     if(uname) {
         const u = DATA.users.get(uname)['Admin'];
         form.elements['uname'].value = u.uname;
         form.elements['uname'].disabled = true;
         form.elements['email'].value = u.email;
+        del.disabled = false
     } else {
         form.elements['uname'].disabled = false;
         for(const ipt of form.elements) {
             ipt.value = "";
         }
+        del.disabled = true;
     }
 
     DISPLAY.admin_edit.showModal();
@@ -334,19 +354,22 @@ new and updating existing users.
 function edit_boss(evt) {
     const uname = this.getAttribute("data-uname");
     const form = document.forms['alter-boss'];
-    document.getElementById("delete-boss")
-        .setAttribute("data-uname", uname);
+    const del = document.getElementById("delete-boss")
+    del.setAttribute("data-uname", uname);
 
     if(uname) {
         const u = DATA.users.get(uname)['Boss'];
         form.elements['uname'].value = u.uname;
         form.elements['uname'].disabled = true;
         form.elements['email'].value = u.email;
+        del.disabled = false;
     } else {
         form.elements['uname'].disabled = false;
         for(const ipt of form.elements) {
             ipt.value = "";
         }
+        del.removeAttribute("data-uname");
+        del.disabled = true;
     }
 
     DISPLAY.boss_edit.showModal();
@@ -414,3 +437,198 @@ async function delete_boss_submit(evt) {
 
 document.getElementById("delete-boss")
     .addEventListener("click", delete_boss_submit);
+
+
+function edit_teacher(evt) {
+    const uname = this.getAttribute("data-uname");
+    const form = document.forms['alter-teacher'];
+    const del = document.getElementById("delete-teacher");
+    del.setAttribute("data-uname", uname);
+    
+    if(uname) {
+        const u = DATA.users.get(uname)['Teacher'];
+        form.elements['uname'].value = u.base.uname;
+        form.elements['uname'].disabled = true;
+        form.elements['email'].value = u.base.email;
+        form.elements['name'].value = u.name;
+        del.disabled = false;
+    } else {
+        for(const ipt of form.elements) {
+            ipt.value = "";
+        }
+        del.removeAttribute("data-uname");
+        del.disabled = true;
+    }
+
+    DISPLAY.teacher_edit.showModal();
+}
+
+document.getElementById("add-teacher")
+    .addEventListener("click", edit_teacher);
+
+function edit_teacher_submit() {
+    const form = document.forms['alter-teacher'];
+    const data = new FormData(form);
+    // Manually ensure possibly-disabled input value still here.
+    const uname_input = form.elements["uname"];
+    data.set("uname", uname_input.value);
+
+    const uname = data.get("uname") || "";
+    const email = (data.get("email") || "").trim();
+    const name = (data.get("name") || "").trim();
+
+    const u = {
+        "Teacher": {
+            "base": {
+                "uname": uname,
+                "role": "Teacher",
+                "salt": "",
+                "email": email,
+            },
+            "name": name
+        }
+    };
+
+    DISPLAY.teacher_edit.close();
+    if(uname_input.disabled) {
+        request_action("update-user", u, `Updating user ${uname}...`);
+    } else {
+        request_action("add-user", u, `Adding user $[uname]...`);
+    }
+}
+
+document.getElementById("alter-teacher-cancel")
+    .addEventListener("click", (evt => {
+        evt.preventDefault();
+        DISPLAY.teacher_edit.close();
+    }));
+document.getElementById("alter-teacher-confirm")
+    .addEventListener("click", edit_teacher_submit);
+
+async function delete_teacher_submit(evt) {
+    const uname = this.getAttribute("data-uname");
+    const q = `Are you sure you want to delete Teacher ${uname}?`;
+    if(await are_you_sure(q)) {
+        DISPLAY.teacher_edit.close();
+        request_action("delete-user", uname, `Deleting ${uname}...`);
+    }
+}
+
+document.getElementById("delete-teacher")
+    .addEventListener("click", delete_teacher_submit);
+
+function populate_teacher_selector(teacher_uname) {
+    let sel = document.getElementById("alter-student-teacher");
+    
+    recursive_clear(sel);
+
+    for(const [uname, u] of DATA.users) {
+        if(u.Teacher) {
+            const opt = document.createElement("option");
+            set_text(opt, u.Teacher.name);
+            opt.value = uname;
+            sel.appendChild(opt);
+        }
+    }
+
+    if(teacher_uname) {
+        sel.value = teacher_uname;
+    }
+}
+
+function edit_student(evt) {
+    const uname = this.getAttribute("data-uname");
+    const form = document.forms["alter-student"];
+    const del = document.getElementById("delete-admin");
+    del.setAttribute("data-uname", uname);
+    
+    if(uname) {
+        const u = DATA.users.get(uname)['Student'];
+        const b = u.base;
+
+        form.elements["uname"].value = b.uname;
+        form.elements["uname"].disabled = true;
+        form.elements["last"].value = u.last;
+        form.elements["rest"].value = u.rest;
+        form.elements["email"].value = b.email;
+        form.elements["parent"].value = u.parent;
+        populate_teacher_selector(u.teacher);
+        del.disabled = false;
+
+    } else {
+        form.elements["uname"].disabled = false;
+        for(const ipt of form.elements) {
+            ipt.value = "";
+        }
+        populate_teacher_selector(null);
+        del.removeAttribute("data-uname");
+        del.disabled = true;
+    }
+
+    DISPLAY.student_edit.showModal();
+}
+
+document.getElementById("add-student")
+    .addEventListener("click", edit_student);
+
+function edit_student_submit() {
+    const form = document.forms['alter-student'];
+    const data = new FormData(form);
+    const uname_input = form.elements['uname'];
+    data.set("uname", uname_input.value);
+
+    const uname = data.get("uname") || "";
+    const email = (data.get("email") || "").trim();
+    const last = data.get("last") || "";
+    const rest = data.get("rest") || "";
+    const teacher = data.get("teacher");
+    const parent = (data.get("parent") || "").trim();
+
+    let u = {
+        "Student": {
+            "base": {
+                "uname": uname,
+                "role": "Student",
+                "salt": "",
+                "email": email,
+            },
+            "last": last,
+            "rest": rest,
+            "teacher": teacher,
+            "parent": parent,
+            "fall_exam_fraction": 0.2,
+            "spring_exam_fraction": 0.2,
+            "fall_notices": 0,
+            "spring_notices": 0,
+        }
+    };
+
+    console.log("Inserting student:", u);
+
+    DISPLAY.student_edit.close();
+    if(uname_input.disabled) {
+        request_action("update-user", u, `Updating user $[uname]...`);
+    } else {
+        request_action("add-user", u, `Adding user ${uname}...`);
+    }
+}
+
+document.getElementById("alter-student-cancel")
+    .addEventListener("click", (evt)=> {
+        evt.preventDefault();
+        DISPLAY.student_edit.close();
+    });
+document.getElementById("alter-student-confirm")
+    .addEventListener("click", edit_student_submit);
+
+async function delete_student_submit(evt) {
+    const uname = this.getAttribute("data-uname");
+    const q = `Are you sure you want to delete Student ${uname}?`;
+    if(await are_you_sure(q)) {
+        DISPLAY.student_edit.close();
+        request_action("delete-user", uname, `Deleting ${uname}...`);
+    }
+}
+
+document.getElementById("delete-student")
+    .addEventListener("click", delete_student_submit);

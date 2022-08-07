@@ -161,10 +161,22 @@ impl Glob {
                 let data = self.data.read().await;
                 data.insert_boss(&base.uname, &base.email).await?
             },
-            user => {
-                let estr = format!("Insertion through Glob unimplemented for {}", user.role());
-                return Err(estr);
-            },
+            User::Teacher(t) => {
+                let data = self.data.read().await;
+                data.insert_teacher(
+                    &t.base.uname,
+                    &t.base.email,
+                    &t.name
+                ).await?
+            }
+            User::Student(s) => {
+                let data = self.data.read().await;
+                let mut studs = vec![s.clone()];
+                data.insert_students(&mut studs).await?;
+                // .unwrap()ping is fine here, because we just ensured `studs`
+                // was a vector of length exactly 1.
+                studs.pop().unwrap().base.salt
+            }
         };
 
         {
@@ -196,10 +208,34 @@ impl Glob {
             User::Teacher(t) => {
                 data.update_teacher(&t.base.uname, &t.base.email, &t.name).await?;
             },
-            User::Student(_) => {
-                return Err(
-                    "Glob::update_user() is not yet implemented for Students.".to_owned()
-                );
+            User::Student(s) => {
+                /*  Here we have to replace several of the fields of `s` from
+                    the value stored in `self.users` because the "Admin" user
+                    doesn't have access to them, and the values passed from the
+                    Admin page will not be correct. */
+                let old_u = match self.users.get(&s.base.uname) {
+                    Some(ou) => match ou {
+                        User::Student(ous) => ous,
+                        x => {
+                            return Err(format!(
+                                "{:?} is not a Student ({}).",
+                                &s.base.uname, &x.role()
+                            ));
+                        },
+                    },
+                    None => { return Err(format!(
+                        "{:?} is not a User in the database.", &s.base.uname
+                    )); },
+                };
+                let mut s = s.clone();
+                s.fall_exam   = old_u.fall_exam.clone();
+                s.spring_exam = old_u.spring_exam.clone();
+                s.fall_exam_fraction   = old_u.fall_exam_fraction;
+                s.spring_exam_fraction = old_u.spring_exam_fraction;
+                s.fall_notices   = old_u.fall_notices;
+                s.spring_notices = old_u.spring_notices;
+
+                data.update_student(&s).await?;
             },
         }
 

@@ -648,6 +648,45 @@ impl Store {
         Ok(n_stud_inserted as usize)
     }
 
+    pub async fn update_student(&self, u: &Student) -> Result<(), DbError> {
+        log::trace!("Store::update_student( [ {:?} ] ) called.", &u.base.uname);
+
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+
+        self.update_base_user(&t, &u.base.uname, &u.base.email).await?;
+
+        let n_updated = t.execute(
+            "UPDATE students SET
+                last = $1, rest = $2, teacher = $3, parent = $4,
+                fall_exam = $5, spring_exam = $6,
+                fall_exam_fraction = $7, spring_exam_fraction = $8,
+                fall_notices = $9, spring_notices = $10
+            WHERE uname = $11",
+            &[
+                &u.last, &u.rest, &u.teacher, &u.parent,
+                &u.fall_exam, &u.spring_exam,
+                &u.fall_exam_fraction, &u.spring_exam_fraction,
+                &u.fall_notices, &u.spring_notices,
+                &u.base.uname
+            ]
+        ).await?;
+
+        if n_updated == 0 {
+            return Err(DbError(format!(
+                "{:?} has no entry in the 'students' table.", &u.base.uname
+            )));
+        } else if n_updated > 1{
+            log::warn!(
+                "User {:?} has {} entries in the 'students' table.",
+                &u.base.uname, &n_updated
+            );
+        }
+
+        t.commit().await?;
+        Ok(())
+    }
+
     async fn get_base_users(
         t: &Transaction<'_>
     ) -> Result<HashMap<String, BaseUser>, DbError> {
