@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn make_serialized() {
+    fn make_users_serialized() {
         use std::io::Write;
         use serde_json::to_writer_pretty;
         

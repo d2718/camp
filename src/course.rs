@@ -26,7 +26,7 @@ level = 12.1
 use std::cmp::Ordering;
 use std::io::{BufRead, BufReader, Cursor, Read};
 
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 
 /// Count the number of newlines in a `&str`.
 fn count_newlines(s: &str) -> usize {
@@ -152,7 +152,7 @@ pub struct Custom {
     pub weight: f32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Chapter {
     pub id: i64,
     pub course_id: i64,
@@ -222,7 +222,7 @@ struct CourseHeader {
     level: f32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Course {
     pub id: i64,
     pub sym: String,
@@ -398,5 +398,25 @@ mod tests {
         assert!(crs.chapter(8).is_none());
         let chapt = fs::read_to_string("test/pc_ch4.debug").unwrap();
         assert_eq!(chapt, format!("{:#?}", crs.chapter(4).unwrap()));
+    }
+
+    #[test]
+    fn make_course_serialized() {
+        use std::io::Write;
+        use serde_json::to_writer_pretty;
+
+        let crs = Course::from_reader(
+            fs::File::open("test/good_course_0.mix").unwrap()
+        ).unwrap();
+
+        println!("Debug:\n{:#?}\n", &crs);
+
+        let mut buff: Vec<u8> = Vec::new();
+        buff.extend_from_slice(b"serde_json:\n");
+        to_writer_pretty(&mut buff, &crs).unwrap();
+        buff.push(b'\n');
+        let buff = String::from_utf8(buff).unwrap();
+
+        println!("{}", &buff);
     }
 }

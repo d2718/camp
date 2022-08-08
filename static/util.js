@@ -1,14 +1,84 @@
 /*
-api_request.js
+util.js
 
-The machinery for tracking which API requests have come back and displaying
-progress accordingly.
+Utility functions for Admins and Teachers (those doing heavy API call work).
+
+  * The machinery for tracking which API requests have come back and displaying
+    progress accordingly.
+  * Some other stuff.
+
+This script should be loaded synchronously at the bottom of the <BODY>, and
+other scripts should be loaded with the DEFER attribute, to assure this loads
+ahead of them.
 */
+
+function ensure_on_load(callback) {
+    if(document.readystate == "complete") {
+        callback();
+    } else {
+        window.addEventListener("load", callback);
+    }
+}
+
 function recursive_clear(elt) {
     while(elt.firstChild) {
         recursive_clear(elt.lastChild);
         elt.removeChild(elt.lastChild);
     }
+}
+
+async function get_file_as_text(file) {
+    const reader = new FileReader(file);
+    
+    const p = new Promise((resolve, reject) => {
+        reader.addEventListener("load", (evt) => {
+            resolve(evt.target.result);
+        });
+        reader.addEventListener("error", (evt) => {
+            reject(evt);
+        });
+    });
+
+    reader.readAsText(file);
+    return p;
+}
+
+function set_text(elt, text) {
+    recursive_clear(elt);
+    elt.appendChild(document.createTextNode(text));
+}
+
+function text_td(text) {
+    const td = document.createElement("td");
+    td.appendChild(document.createTextNode(text));
+    return td;
+}
+function label(text, elt) {
+    const lab = document.createElement("label");
+    lab.appendChild(document.createTextNode(text));
+    if (typeof(elt) == "string") {
+        lab.setAttribute("for", elt);
+        return lab;
+    } else if (elt.tagName) {
+        elt.appendChild(lab);
+    } else {
+        return lab;
+    }
+}
+
+async function are_you_sure(question) {
+    set_text(DISPLAY.confirm_message, question);
+    DISPLAY.confirm.showModal();
+    const p = new Promise((resolve, _) => {
+        DISPLAY.confirm.onclose = () => {
+            if(DISPLAY.confirm.returnValue == "ok") {
+                resolve(true);
+            } else {
+                resolve(false);
+            }
+        }
+    });
+    return p;
 }
 
 const RQ = {

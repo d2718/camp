@@ -2,6 +2,10 @@
 admin.js
 
 Frontend JS BS to make the admin's page work.
+
+The util.js script must load before this one. It should be loaded
+synchronously at the bottom of the <BODY>, and this should be
+DEFERred.
 */
 const API_ENDPOINT = "/admin";
 const STATE = {
@@ -14,6 +18,7 @@ STATE.next_error = function() {
 }
 const DATA = {
     users: new Map(),
+    courses: new Map(),
 };
 
 const DISPLAY = {
@@ -29,135 +34,8 @@ const DISPLAY = {
     student_edit:  document.getElementById("alter-student"),
     student_upload: document.getElementById("upload-students-dialog"),
     student_paste: document.getElementById("paste-students-dialog"),
+    course_tbody:  document.querySelector("table#course-table > tbody"),
 };
-
-async function get_file_as_text(file) {
-    const reader = new FileReader(file);
-    
-    const p = new Promise((resolve, reject) => {
-        reader.addEventListener("load", (evt) => {
-            resolve(evt.target.result);
-        });
-        reader.addEventListener("error", (evt) => {
-            reject(evt);
-        });
-    });
-
-    reader.readAsText(file);
-    return p;
-}
-
-function set_text(elt, text) {
-    recursive_clear(elt);
-    elt.appendChild(document.createTextNode(text));
-}
-
-function text_td(text) {
-    const td = document.createElement("td");
-    td.appendChild(document.createTextNode(text));
-    return td;
-}
-function label(text, elt) {
-    const lab = document.createElement("label");
-    lab.appendChild(document.createTextNode(text));
-    if (typeof(elt) == "string") {
-        lab.setAttribute("for", elt);
-        return lab;
-    } else if (elt.tagName) {
-        elt.appendChild(lab);
-    } else {
-        return lab;
-    }
-}
-function make_edit_button_td(uname, edit_func) {
-    const butt = document.createElement("button");
-    butt.setAttribute("data-uname", uname);
-    label("edit", butt);
-    butt.addEventListener("click", edit_func);
-    const td = document.createElement("td");
-    td.appendChild(butt);
-    return td;
-}
-
-async function are_you_sure(question) {
-    set_text(DISPLAY.confirm_message, question);
-    DISPLAY.confirm.showModal();
-    const p = new Promise((resolve, _) => {
-        DISPLAY.confirm.onclose = () => {
-            if(DISPLAY.confirm.returnValue == "ok") {
-                resolve(true);
-            } else {
-                resolve(false);
-            }
-        }
-    });
-    return p;
-}
-
-/*
-Add user object to appropriate table. Also insert into the
-DATA.users Map.
-*/
-function add_user_to_display(u) {
-    console.log("adding user to display:", u);
-
-    if (u.Admin) {
-        const v = u.Admin;
-        DATA.users.set(v.uname, u);
-
-        const tr = document.createElement("tr");
-        tr.setAttribute("data-uname", v.uname);
-        tr.appendChild(text_td(v.uname));
-        tr.appendChild(text_td(v.email));
-        tr.appendChild(make_edit_button_td(v.uname, edit_admin));
-
-        DISPLAY.admin_tbody.appendChild(tr);
-
-    } else if(u.Boss) {
-        const v = u.Boss;
-        DATA.users.set(v.uname, u);
-
-        const tr = document.createElement("tr");
-        tr.setAttribute("data-uname", v.uname);
-        tr.appendChild(text_td(v.uname));
-        tr.appendChild(text_td(v.email));
-        tr.appendChild(make_edit_button_td(v.uname, edit_boss));
-
-        DISPLAY.boss_tbody.appendChild(tr);
-
-    } else if(u.Teacher) {
-        const v = u.Teacher.base;
-        DATA.users.set(v.uname, u);
-
-        const tr = document.createElement("tr");
-        tr.setAttribute("data-uname", v.uname);
-        tr.appendChild(text_td(v.uname));
-        tr.appendChild(text_td(v.email));
-        tr.appendChild(text_td(u.Teacher.name));
-        tr.appendChild(make_edit_button_td(v.uname, edit_teacher));
-
-        DISPLAY.teacher_tbody.appendChild(tr);
-    
-    } else if(u.Student) {
-        const v = u.Student.base;
-        const s = u.Student;
-        DATA.users.set(v.uname, u);
-
-        const tr = document.createElement("tr");
-        tr.setAttribute("data-uname", v.uname);
-        tr.appendChild(text_td(v.uname));
-        tr.appendChild(text_td(`${s.last}, ${s.rest}`));
-        tr.appendChild(text_td(s.teacher));
-        tr.appendChild(text_td(v.email));
-        tr.appendChild(text_td(s.parent));
-        tr.appendChild(make_edit_button_td(v.uname, edit_student));
-
-        DISPLAY.student_tbody.appendChild(tr);
-
-    } else {
-        console.log("add_user_to_display() not implemented for", u);
-    }
-}
 
 function populate_users(r) {
     r.json()
@@ -240,21 +118,99 @@ function request_action(action, body, description) {
 
 /*
 
+USERS section
+
+The functions and objects in this section are for dealing with Users,
+that is, the stuff on the "Staff" and "Students" tabs.
+
+*/
+
+function make_user_edit_button_td(uname, edit_func) {
+    const butt = document.createElement("button");
+    butt.setAttribute("data-uname", uname);
+    label("edit", butt);
+    butt.addEventListener("click", edit_func);
+    const td = document.createElement("td");
+    td.appendChild(butt);
+    return td;
+}
+
+/*
+Add user object to appropriate table. Also insert into the
+DATA.users Map.
+*/
+function add_user_to_display(u) {
+    console.log("adding user to display:", u);
+
+    if (u.Admin) {
+        const v = u.Admin;
+        DATA.users.set(v.uname, u);
+
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-uname", v.uname);
+        tr.appendChild(text_td(v.uname));
+        tr.appendChild(text_td(v.email));
+        tr.appendChild(make_user_edit_button_td(v.uname, edit_admin));
+
+        DISPLAY.admin_tbody.appendChild(tr);
+
+    } else if(u.Boss) {
+        const v = u.Boss;
+        DATA.users.set(v.uname, u);
+
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-uname", v.uname);
+        tr.appendChild(text_td(v.uname));
+        tr.appendChild(text_td(v.email));
+        tr.appendChild(make_user_edit_button_td(v.uname, edit_boss));
+
+        DISPLAY.boss_tbody.appendChild(tr);
+
+    } else if(u.Teacher) {
+        const v = u.Teacher.base;
+        DATA.users.set(v.uname, u);
+
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-uname", v.uname);
+        tr.appendChild(text_td(v.uname));
+        tr.appendChild(text_td(v.email));
+        tr.appendChild(text_td(u.Teacher.name));
+        tr.appendChild(make_user_edit_button_td(v.uname, edit_teacher));
+
+        DISPLAY.teacher_tbody.appendChild(tr);
+    
+    } else if(u.Student) {
+        const v = u.Student.base;
+        const s = u.Student;
+        DATA.users.set(v.uname, u);
+
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-uname", v.uname);
+        tr.appendChild(text_td(v.uname));
+        tr.appendChild(text_td(`${s.last}, ${s.rest}`));
+        tr.appendChild(text_td(s.teacher));
+        tr.appendChild(text_td(v.email));
+        tr.appendChild(text_td(s.parent));
+        tr.appendChild(make_user_edit_button_td(v.uname, edit_student));
+
+        DISPLAY.student_tbody.appendChild(tr);
+
+    } else {
+        console.log("add_user_to_display() not implemented for", u);
+    }
+}
+
+/*
+
 PAGE LOAD SECTION
 
 */
 
 console.log(DISPLAY);
 
-function populate_all(_evt) {
-    request_action("populate-users", "Populating Admins...");
-}
-
-if(document.readyState == "complete") {
-    populate_all(null);
-} else {
-    window.addEventListener("load", populate_all);
-}
+ensure_on_load(() => {
+    request_action("populate-users", "", "Fetching User data...");
+});
 
 
 /*
@@ -695,3 +651,28 @@ function upload_students_submit(evt) {
 
 document.getElementById("upload-students-confirm")
     .addEventListener("click",upload_students_submit);
+
+
+/*
+
+COURSES section
+
+*/
+
+function add_course_to_display(c) {
+    console.log("adding course to display", c);
+
+    const tr = document.createElement("tr");
+    tr.setAttribute("data-sym", c.sym);
+    tr.appendChild(text_td(c.sym));
+    tr.appendChild(text_td(c.title));
+    tr.appendChild(text_td(c.level));
+    let td = document.createElement("td");
+    const cite = document.createElement("cite");
+    set_text(cite, c.book);
+    td.appendChild(cite);
+    tr.appendChild(td);
+    tr.appendChild(text_td(c.chapters.length));
+
+    DISPLAY.course_tbody.appendChild(tr);
+}

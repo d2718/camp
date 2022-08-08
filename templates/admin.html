@@ -12,7 +12,6 @@ const AUTH = {
     key: "{{key}}"
 };
         </script>
-        <script src="/static/api_request.js" defer></script>
         <script src="/static/admin.js" defer></script>
     </head>
     <body>
@@ -76,10 +75,10 @@ const AUTH = {
         <h2>Students</h2>
         <div id="students">
             <table id="student-table" class="user-table">
-                <thead>
+                <thead><tr>
                     <th>uname</th><th>name</th><th>teacher</th>
                     <th>email</th><th>parent email</th><th>actions</th>
-                </thead>
+                </tr></thead>
                 <tbody></tbody>
             </table>
 
@@ -100,7 +99,13 @@ const AUTH = {
     <div id="course-tab-content" class="tab-content">
         <h2>Courses</h2>
         <div id="courses">
-            <p>populating courses...</p>
+            <table id="course-table">
+                <thead><tr>
+                    <th>sym</th><th>course title</th><th>level</th>
+                    <th>textbook title</th><th># chapters</th><th>actions</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 </li>
@@ -269,5 +274,6 @@ const AUTH = {
             </form>
         </dialog>
 
+    <script src="/static/util.js"></script>
     </body>
 </html>
