@@ -20,8 +20,9 @@ CREATE TABLE keys (
 Additionally, each `uname` should have a short `salt` string associated with
 it (stored separately somewhere) for use in password hashing.
 */
+use std::sync::Arc;
 use blake3::{Hash, Hasher};
-use tokio_postgres::{Client, NoTls, Statement, types::Type};
+use tokio_postgres::{Client, NoTls, Statement, Transaction, types::Type};
 use rand::{Rng, distributions};
 
 const DEFAULT_KEY_LENGTH: usize = 32;
@@ -98,6 +99,11 @@ pub enum AuthResult {
     InvalidKey,
 }
 
+pub struct ConnHandle<'a> {
+    client: Arc<Client>,
+    t: Transaction<'a>
+}
+
 pub struct Db {
     connection_string: String,
     key_chars: Vec<char>,
@@ -142,7 +148,7 @@ impl Db {
         new_key
     }
     
-    async fn connect(&self) -> Result<Client, DbError> {
+    pub async fn connect(&self) -> Result<Client, DbError> {
         log::trace!(
             "Db::connect() called w/connection string: {:?}",
             &self.connection_string
@@ -192,6 +198,7 @@ impl Db {
     */
     pub async fn add_users(
         &self,
+        t: &Transaction<'_>,
         unames: &[&str],
         passwords: &[&str],
         salts: &[&str]
@@ -223,10 +230,6 @@ impl Db {
         let hashes: Vec<String> = std::iter::zip(passwords, salts)
             .map(|(pwd, salt)| hash_with_salt(pwd, salt.as_bytes()))
             .collect();
-        
-        let mut client = self.connect().await?;
-        let t = client.transaction().await
-            .map_err(|e| format!("Auth DB unable to begin transaction: {}", &e))?;
         
         let preexisting_user_query = t.prepare_typed(
             "SELECT uname FROM users WHERE uname = ANY($1)",
@@ -269,18 +272,13 @@ impl Db {
                 },
             }
         }
-        match t.commit().await {
-            Ok(()) => {
-                log::trace!("Inserted {} of {} users.", &n_inserted, &unames.len());
-                Ok(n_inserted)
-            },
-            Err(e) => Err(DbError(format!("Error commiting transaction: {}", &e))),
-        }
+        Ok(n_inserted)
     }
     
     /// Convenience wrapper around `Db::add_users()` to just add one user.
     pub async fn add_user(
         &self,
+        t: &Transaction<'_>,
         uname: &str,
         password: &str,
         salt: &str,
@@ -290,7 +288,7 @@ impl Db {
             uname, password, salt
         );
         
-        match self.add_users(&[uname], &[password], &[salt]).await {
+        match self.add_users(t, &[uname], &[password], &[salt]).await {
             Err(e) => Err(e),
             Ok(0) => Err(DbError(format!("Failed to add user {:?}", uname))),
             Ok(1) => Ok(()),
@@ -301,13 +299,15 @@ impl Db {
         }
     }
     
-    pub async fn delete_users(&self, unames: &[&str]) -> Result<u64, DbError> {
+    pub async fn delete_users(
+        &self,
+        t: &Transaction<'_>,
+        unames: &[&str]
+    ) -> Result<u64, DbError> {
         log::trace!("Db::delete_users( {:?} ) called", &unames);
         
         let owned_unames: Vec<String> = unames.iter().map(|s| String::from(*s)).collect();
         
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
         let n_keys = t.execute(
             "DELETE FROM keys WHERE uname = ANY($1)",
             &[&owned_unames]
@@ -319,7 +319,6 @@ impl Db {
             &[&owned_unames]
         ).await?;
         log::trace!("Deleted {} users.", &n_users);
-        t.commit().await?;
         
         Ok(n_users)
     }

@@ -180,7 +180,7 @@ impl Store {
         new_salt
     }
 
-    async fn connect(&self) -> Result<Client, DbError> {
+    pub async fn connect(&self) -> Result<Client, DbError> {
         log::trace!(
             "Store::connect() called w/connection string {:?}",
             &self.connection_string
