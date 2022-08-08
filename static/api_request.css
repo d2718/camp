@@ -33,3 +33,8 @@ div#progress ul,
 div#error > ul {
     list-style-type: circle;
 }
+div#progress > ul > li,
+div#error > ul > li {
+    font-family: monospace;
+    white-space: pre-wrap;
+}

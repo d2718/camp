@@ -35,6 +35,9 @@ const AUTH = {
                 <button id="add-admin"><label>add Admin</label></button>
             </div>
         </div>
+
+        <hr>
+
         <h2>Bosses</h2>
         <div id="staff-bosses">
             <table id="boss-table" class="user-table">
@@ -45,7 +48,11 @@ const AUTH = {
             <div>
                 <button id="add-boss"><label>add Boss</label></button>
             </div>
-        </div><h2>Teachers</h2>
+        </div>
+        
+        <hr>
+        
+        <h2>Teachers</h2>
         <div id="staff-teachers">
             <table id="teacher-table" class="user-table">
                 <thead><th>uname</th><th>email</th><th>name</th><th>actions</th></thead>
@@ -78,6 +85,8 @@ const AUTH = {
 
             <div>
                 <button id="add-student"><label>add one Student</label></button>
+                <button id="upload-students"><label>upload CSV of Students</label></button>
+                <button id="paste-students"><label>paste CSV of Students</label></button>
             </div>
         </div>
     </div>
@@ -111,11 +120,6 @@ const AUTH = {
             </button>
         </div>
 
-        <datalist id="admin-action-list">
-            <option value="email">change email</option>
-            <option value="delete">delete user</option>
-        </datalist>
-
         <dialog id="alter-admin" class="edit">
             <h1>Admin Details</h1>
             <form name="alter-admin" method="dialog">
@@ -126,10 +130,10 @@ const AUTH = {
                 <input type="email" name="email" id="alter-admin-email"
                        required>
                 <button id="alter-admin-cancel">
-                    <label>cancel</label>
+                    <label class="cancel">cancel</label>
                 </button>
                 <button id="alter-admin-confirm">
-                    <label>confirm</label>
+                    <label class="confirm">confirm</label>
                 </button>
             </form>
             <hr>
@@ -150,10 +154,10 @@ const AUTH = {
                 <input type="email" name="email" id="alter-boss-email"
                        required>
                 <button id="alter-boss-cancel">
-                    <label>cancel</label>
+                    <label class="cancel">cancel</label>
                 </button>
                 <button id="alter-boss-confirm">
-                    <label>confirm</label>
+                    <label class="confirm">confirm</label>
                 </button>
             </form>
             <hr>
@@ -176,10 +180,10 @@ const AUTH = {
                 <label for="alter-teacher-name">name</label>
                 <input name="name" id="alter-teacher-name" required>
                 <button id="alter-teacher-cancel">
-                    <label>cancel</label>
+                    <label class="cancel">cancel</label>
                 </button>
                 <button id="alter-teacher-confirm">
-                    <label>confirm</label>
+                    <label class="confirm">confirm</label>
                 </button>
             </form>
             <hr>
@@ -209,10 +213,10 @@ const AUTH = {
                 <input type="email" name="parent" id="alter-student-parent"
                        required>
                 <button id="alter-student-cancel">
-                    <label>cancel</label>
+                    <label class="cancel">cancel</label>
                 </button>
                 <button id="alter-student-confirm">
-                    <label>confirm</label>
+                    <label class="confirm">confirm</label>
                 </button>
             </form>
             <hr>
@@ -223,15 +227,44 @@ const AUTH = {
             </div>
         </dialog>
 
+        <dialog id="upload-students-dialog" class="edit">
+            <h1>Upload CSV File of Students</h1>
+            <form name="upload-students" method="dialog">
+                <label for="upload-students-file">file</label>
+                <input type="file" name="file" id="upload-students-file" required>
+                <button id="upload-students-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="upload-students-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+            </form>
+        </dialog>
+
+        <dialog id="paste-students-dialog" class="edit">
+            <h1>Paste CSV File of Students</h1>
+            <div class="center">
+                <textarea id="student-csv-content"></textarea>
+            </div>
+            <form name="paste-students" method="dialog">
+                <button id="paste-students-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="paste-students-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+            </form>
+        </dialog>
+
         <dialog id="are-you-sure">
             <h1>&iquest;Are you sure?</h1>
             <p id="are-you-sure-message"></p>
             <form name="confirmation" method="dialog">
                 <button id="confirmation-cancel" value="cancel">
-                    <label>No, I am not.</label>
+                    <label class="cancel">No, I am not.</label>
                 </button>
                 <button id="confirmation-confirm" value="ok">
-                    <label>Yes, I sure am.</label>
+                    <label class="confirm">Yes, I sure am.</label>
                 </button>
             </form>
         </dialog>

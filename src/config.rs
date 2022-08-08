@@ -2,6 +2,8 @@
 Structs to hold configuration data and global variables.
 */
 use std::collections::HashMap;
+use std::fmt::Write;
+use std::io::Cursor;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -188,6 +190,81 @@ impl Glob {
             ).await {
                 self.data.read().await.delete_user(u.uname()).await?;
                 return Err(format!("Unable to insert new user: {}", &e));
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn undo_upload_store_insert(
+        &self, unames: &[&str]
+    ) -> Result<(), String> {
+        log::trace!(
+            "Glob::undo_upload_store_insert( {:?} ) called.", unames
+        );
+
+        let mut errors = String::from(
+"There was an error inserting names into the auth database after they were inserted into the data DB.
+The following user names then encountered errors being *removed* from the data DB:\n "
+        );
+
+        let mut has_errors = false;
+        let data = self.data.read().await;
+        for uname in unames.iter() {
+            if let Err(e) = data.delete_user(*uname).await {
+                has_errors = true;
+                if let Err(we) = writeln!(&mut errors, "{}: {}", uname, e) {
+                    log::error!("Error generating error string!!!: {}", &we);
+                }
+            }
+        }
+
+        if has_errors {
+            Err(errors)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub async fn upload_students(&self, csv_data: &str) -> Result<(), String> {
+        log::trace!(
+            "Glob::upload_students( [ {} bytes of CSV body ] ) called.",
+            &csv_data.len()
+        );
+
+        let mut reader = Cursor::new(csv_data);
+        let mut students = Student::vec_from_csv_reader(&mut reader)?;
+        {
+            let data = self.data.read().await;
+            let n_studs = data.insert_students(&mut students).await?;
+            log::trace!("Inserted {} Students into store.", &n_studs);
+        }
+
+        let new_password = "this is a new password".to_owned();
+        let mut uname_refs: Vec<&str> = Vec::with_capacity(students.len());
+        let mut pword_refs: Vec<&str> = Vec::with_capacity(students.len());
+        let mut salt_refs:  Vec<&str> = Vec::with_capacity(students.len());
+        for s in students.iter() {
+            uname_refs.push(&s.base.uname);
+            pword_refs.push(&new_password);
+            salt_refs.push(&s.base.salt);
+        }
+
+        {
+            let auth = self.auth.read().await;
+            match auth.add_users(
+                &uname_refs, &pword_refs, &salt_refs
+            ).await {
+                Ok(n) => { log::trace!("Successfully added {} students to both DBs.", n); },
+                Err(e) => {
+                    if let Err(addl_e) = self.undo_upload_store_insert(&uname_refs).await {
+                        let estr = format!(
+                            "Error inserting users into auth DB: {}\n\nADDITIONALLY:\n\n{}",
+                            &e, &addl_e
+                        );
+                        return Err(estr);
+                    }
+                }
             }
         }
 

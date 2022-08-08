@@ -122,6 +122,7 @@ pub async fn api(
         "add-user" => add_user(body, glob.clone()).await,
         "update-user" => update_user(body, glob.clone()).await,
         "delete-user" => delete_user(body, glob.clone()).await,
+        "upload-students" => upload_students(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognizable x-camp-action value.", x)
         ),
@@ -204,6 +205,35 @@ async fn add_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
     }
 
     //populate_role(glob, u.role()).await
+    populate_users(glob).await
+}
+
+async fn upload_students(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires a CSV body.".to_owned()
+        ); }
+    };
+
+    {
+        let glob = glob.read().await;
+        if let Err(e) = glob.upload_students(&body).await {
+            log::error!(
+                "Error uploading new students via CSV: {}\n\nCSV text:\n\n{}\n",
+                &e, &body
+            );
+            return text_500(Some(e));
+        }
+    }
+    {
+        let mut glob = glob.write().await;
+        if let Err(e) = glob.refresh_users().await {
+            log::error!("Error refreshing user hash from database: {}", &e);
+            return text_500(Some("Unable to reread users from database.".to_owned()));
+        }
+    }
+
     populate_users(glob).await
 }
 

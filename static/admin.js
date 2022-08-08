@@ -27,7 +27,25 @@ const DISPLAY = {
     teacher_edit:  document.getElementById("alter-teacher"),
     student_tbody: document.querySelector("table#student-table > tbody"),
     student_edit:  document.getElementById("alter-student"),
+    student_upload: document.getElementById("upload-students-dialog"),
+    student_paste: document.getElementById("paste-students-dialog"),
 };
+
+async function get_file_as_text(file) {
+    const reader = new FileReader(file);
+    
+    const p = new Promise((resolve, reject) => {
+        reader.addEventListener("load", (evt) => {
+            resolve(evt.target.result);
+        });
+        reader.addEventListener("error", (evt) => {
+            reject(evt);
+        });
+    });
+
+    reader.readAsText(file);
+    return p;
+}
 
 function set_text(elt, text) {
     recursive_clear(elt);
@@ -162,7 +180,7 @@ function field_response(r) {
     if(!r.ok) {
         r.text()
         .then(t => {
-            const err_txt = `${t} (${r.status}: ${r.statusText})`;
+            const err_txt = `${t}\n(${r.status}: ${r.statusText})`;
             RQ.add_err(err_txt);
         }
         ).catch(e => {
@@ -539,7 +557,7 @@ function populate_teacher_selector(teacher_uname) {
 function edit_student(evt) {
     const uname = this.getAttribute("data-uname");
     const form = document.forms["alter-student"];
-    const del = document.getElementById("delete-admin");
+    const del = document.getElementById("delete-student");
     del.setAttribute("data-uname", uname);
     
     if(uname) {
@@ -632,3 +650,48 @@ async function delete_student_submit(evt) {
 
 document.getElementById("delete-student")
     .addEventListener("click", delete_student_submit);
+
+
+document.getElementById("paste-students")
+    .addEventListener("click", () => {
+        DISPLAY.student_paste.showModal(); 
+    });
+
+function paste_students_submit(evt) {
+    const area = document.getElementById("student-csv-content");
+    const data = area.value.trim();
+    if(data == "") {
+        RQ.add_err("Please enter some text before submitting.");
+        return;
+    }
+    DISPLAY.student_paste.close();
+    area.value = "";
+    request_action("upload-students", data, `Uploading new students...`);
+}
+
+document.getElementById("paste-students-confirm")
+    .addEventListener("click", paste_students_submit);
+
+
+document.getElementById("upload-students")
+    .addEventListener("click", () => {
+        DISPLAY.student_upload.showModal();
+    });
+
+function upload_students_submit(evt) {
+    const form = document.forms["upload-students"];
+    const data = new FormData(form);
+    const file = data.get("file");
+
+    get_file_as_text(file)
+    .then((text) => {
+        DISPLAY.student_upload.close();
+        request_action("upload-students", text, `Uploading new students...`);
+    })
+    .catch((err) => {
+        RQ.add_err(`Error opening local file: ${err}`);
+    })
+}
+
+document.getElementById("upload-students-confirm")
+    .addEventListener("click",upload_students_submit);

@@ -484,7 +484,7 @@ impl Store {
             for row in preexisting_uname_rows.iter() {
                 let uname: &str = row.try_get("uname")?;
                 let role: &str = row.try_get("role")?;
-                write!(
+                writeln!(
                     &mut estr,
                     "{:width$} ({})",
                     uname, role, width = uname_len
