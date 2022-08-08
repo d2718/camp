@@ -449,7 +449,7 @@ impl Db {
     }
     
     /// Delete any keys that have been unused for longer than `self.key_life`.
-    async fn cull_old_keys(&self) -> Result<(), DbError> {
+    pub async fn cull_old_keys(&self) -> Result<usize, DbError> {
         log::trace!("Db::cull_old_keys() called.");
         
         let client = self.connect().await?;
@@ -460,7 +460,7 @@ impl Db {
         ).await?;
         log::trace!("Deleted {} keys.", &n_culled);
         
-        Ok(())
+        Ok(n_culled as usize)
     }
     
     /** 

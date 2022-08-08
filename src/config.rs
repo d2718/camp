@@ -117,7 +117,7 @@ pub struct Glob {
     pub addr: SocketAddr,
 }
 
-impl Glob {
+impl<'a> Glob {
     pub fn auth(&self) -> Arc<RwLock<auth::Db>> { self.auth.clone() }
     pub fn data(&self) -> Arc<RwLock<Store>>    { self.data.clone() }
 
@@ -208,6 +208,29 @@ impl Glob {
 
         let mut reader = Cursor::new(csv_data);
         let mut students = Student::vec_from_csv_reader(&mut reader)?;
+        {
+            let mut not_teachers: Vec<(&str, &str, &str)> = Vec::new();
+            for s in students.iter() {
+                if let Some(User::Teacher(_)) = self.users.get(&s.teacher) {
+                    /* This is the happy path. */
+                } else {
+                    not_teachers.push((&s.teacher, &s.last, &s.rest));
+                }
+            }
+
+            if !not_teachers.is_empty() {
+                let mut estr = String::from(
+                    "You have assigned students to the following unames who are not teachers:\n"
+                );
+                for (t, last, rest) in not_teachers.iter() {
+                    writeln!(&mut estr, "{} (assigned to {}, {})", t, last, rest)
+                        .map_err(|e| format!(
+                            "Error generating error message: {}\n(Task failed successfully, lol.)", &e
+                        ))?;
+                }
+                return Err(UnifiedError::String(estr));
+            }
+        }
 
         let data = self.data.read().await;
         let mut data_client = data.connect().await?;
@@ -308,6 +331,30 @@ impl Glob {
     pub async fn delete_user(&self, uname: &str) -> Result<(), UnifiedError> {
         log::trace!("Glob::delete_user( {:?} ) called.", uname);
 
+        {
+            let u = match self.users.get(uname) {
+                None => {
+                    return Err(UnifiedError::String(format!("No User {:?}.", uname)));
+                },
+                Some(u) => u,
+            };
+
+            if u.role() == Role::Teacher {
+                let studs = self.get_students_by_teacher(u.uname());
+                if !studs.is_empty() {
+                    let mut estr = format!(
+                        "The following Students are still assigned to Teacher {:?}\n",
+                        u.uname()
+                    );
+                    for kid in studs.iter() {
+                        estr.push_str(kid.uname());
+                        estr.push('\n');
+                    }
+                    return Err(UnifiedError::String(estr));
+                }
+            }
+        }
+
         let data = self.data.read().await;
         let mut data_client = data.connect().await?;
         let data_t = data_client.transaction().await?;
@@ -328,6 +375,24 @@ impl Glob {
         }
 
         Ok(())
+    }
+
+    pub fn get_students_by_teacher(
+        &'a self,
+        teacher_uname: &'_ str
+    ) -> Vec<&'a User> {
+        log::trace!("Glob::get_students_by_teacher( {:?} ) called.", teacher_uname);
+
+        let mut stud_refs: Vec<&User> = Vec::new();
+        for (_, u) in self.users.iter() {
+            if let User::Student(ref s) = u {
+                if &s.teacher == teacher_uname {
+                    stud_refs.push(u);
+                }
+            }
+        }
+
+        return stud_refs;
     }
 }
 
@@ -391,6 +456,8 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
         return Err(estr)?;
     }
     log::trace!("...auth DB okay.");
+    let n_old_keys = auth_db.cull_old_keys().await?;
+    log::info!("Removed {} expired keys from Auth DB.", &n_old_keys);
 
     log::trace!("Checking state of data DB...");
     let data_db = Store::new(cfg.data_db_connect_string.clone());
