@@ -491,6 +491,7 @@ impl Db {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::UnifiedError;
     use crate::tests::ensure_logging;
     
     use serial_test::serial;
@@ -512,36 +513,41 @@ mod tests {
     
     #[tokio::test]
     #[serial]
-    async fn populate_db() {
+    async fn populate_db() -> Result<(), UnifiedError>{
         ensure_logging();
         
         let db = Db::new(TEST_CONNECTION.to_owned());
-        db.ensure_db_schema().await.unwrap();
+        db.ensure_db_schema().await?;
+        let mut client = db.connect().await?;
+        let t = client.transaction().await?;
         
         let n_users: usize = USERS.len();
         assert_eq!(
-            db.add_users(USERS, PASSWORDS, SALTS).await.unwrap(),
+            db.add_users(&t, USERS, PASSWORDS, SALTS).await?,
             n_users as u64
         );
+        t.commit().await?;
 
         for n in 0..n_users {
             let (uname, pwd, salt) = (USERS[n], PASSWORDS[n], SALTS[n]);
             assert_eq!(
-                db.check_password(uname, pwd, salt).await.unwrap(),
+                db.check_password(uname, pwd, salt).await?,
                 AuthResult::Ok
             );
         }
         
         assert_eq!(
-            db.check_password(USERS[1], "mama moo moo", SALTS[1]).await.unwrap(),
+            db.check_password(USERS[1], "mama moo moo", SALTS[1]).await?,
             AuthResult::BadPassword
         );
         assert_eq!(
-            db.check_password(USERS[1], PASSWORDS[1], "not a real salt").await.unwrap(),
+            db.check_password(USERS[1], PASSWORDS[1], "not a real salt").await?,
             AuthResult::BadPassword
         );
         
-        db.delete_users(&USERS[1..]).await.unwrap();
+        let t = client.transaction().await?;
+        db.delete_users(&t, &USERS[1..]).await?;
+        t.commit().await?;
         
         assert_eq!(
             db.check_password(USERS[1], PASSWORDS[1], SALTS[1]).await.unwrap(),
@@ -554,11 +560,13 @@ mod tests {
             Err(_) => { /* this is okay */ },
             x @ _ => { panic!("Expected Err(_), got {:?}", &x); },
         }
+
+        Ok(())
     }
     
     #[tokio::test]
     #[serial]
-    async fn issue_keys() {
+    async fn issue_keys() -> Result<(), UnifiedError> {
         use tokio::time::sleep;
         use std::time::Duration;
         
@@ -566,11 +574,15 @@ mod tests {
         
         let mut db = Db::new(TEST_CONNECTION.to_owned());
         db.ensure_db_schema().await.unwrap();
+        let mut client = db.connect().await?;
+        let t = client.transaction().await?;
         
-        db.add_users(USERS, PASSWORDS, SALTS).await.unwrap();
+        db.add_users(&t, USERS, PASSWORDS, SALTS).await.unwrap();
+        t.commit().await?;
+        
         let key = match db.check_password_and_issue_key(
             USERS[0], PASSWORDS[0], SALTS[0]
-        ).await.unwrap() {
+        ).await? {
             AuthResult::Key(k) => k,
             x @ _ => { panic!("Expected AuthResult::Key(_), got {:?}", &x); },
         };
@@ -591,6 +603,7 @@ mod tests {
         assert_eq!(db.check_key(USERS[1], &key).await.unwrap(), AuthResult::InvalidKey);
         db.cull_old_keys().await.unwrap();
         
-        db.nuke_database().await.unwrap();
+        db.nuke_database().await?;
+        Ok(())
     }
 }

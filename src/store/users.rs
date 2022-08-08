@@ -918,6 +918,7 @@ mod tests {
 
     use crate::tests::ensure_logging;
     use crate::store::tests::TEST_CONNECTION;
+    use crate::UnifiedError;
 
     fn same_students(a: &Student, b: &Student) -> bool {
         if &a.base.uname  != &b.base.uname { return false; }
@@ -961,7 +962,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn insert_users() -> Result<(), Box<dyn Debug>> {
+    async fn insert_users() -> Result<(), UnifiedError> {
         ensure_logging();
 
         let db = Store::new(TEST_CONNECTION.to_owned());
@@ -1034,12 +1035,13 @@ mod tests {
 
         t.commit().await?;
 
-        db.nuke_database().await.unwrap();
+        db.nuke_database().await?;
+        Ok(())
     }
 
     #[tokio::test]
     #[serial]
-    async fn alter_users() {
+    async fn alter_users() -> Result<(), UnifiedError> {
         ensure_logging();
 
         const NEW_EMAIL: &str = "new@nowhere.org";
@@ -1047,36 +1049,40 @@ mod tests {
 
         let db = Store::new(TEST_CONNECTION.to_owned());
         db.ensure_db_schema().await.unwrap();
+        let mut client = db.connect().await?;
+        let t = client.transaction().await?;
 
-        db.insert_boss(BOSSES[0].0, BOSSES[0].1).await.unwrap();
+        db.insert_boss(&t, BOSSES[0].0, BOSSES[0].1).await?;
         db.insert_teacher(
-            TEACHERS[0].0, TEACHERS[0].1, TEACHERS[0].2
-        ).await.unwrap();
+            &t, TEACHERS[0].0, TEACHERS[0].1, TEACHERS[0].2
+        ).await?;
+        t.commit().await?;
 
-        let mut umap = db.get_users().await.unwrap();
+        let mut umap = db.get_users().await?;
 
         let u = umap.remove(BOSSES[0].0).unwrap();
         assert_eq!(
             (BOSSES[0].0, BOSSES[0].1, Role::Boss),
             (u.uname(), u.email(), u.role())
         );
-        db.update_boss(u.uname(), NEW_EMAIL).await.unwrap();
+        let t = client.transaction().await?;
+        db.update_boss(&t, u.uname(), NEW_EMAIL).await?;
 
         let u = umap.remove(TEACHERS[0].0).unwrap();
         assert_eq!(
             (TEACHERS[0].0, TEACHERS[0].1, Role::Teacher),
             (u.uname(), u.email(), u.role())
         );
-        if let User::Teacher(t) = u {
-            assert_eq!(TEACHERS[0].2, &t.name);
-            db.update_teacher(&t.base.uname, NEW_EMAIL, NEW_NAME)
-                .await.unwrap();
+        if let User::Teacher(teach) = u {
+            assert_eq!(TEACHERS[0].2, &teach.name);
+            db.update_teacher(&t, &teach.base.uname, NEW_EMAIL, NEW_NAME)
+                .await?;
         } else {
             panic!("User is not a teacher.");
         }
-        
+        t.commit().await?;
 
-        umap  = db.get_users().await.unwrap();
+        umap  = db.get_users().await?;
         
         let u = umap.remove(BOSSES[0].0).unwrap();
         assert_eq!(
@@ -1095,6 +1101,7 @@ mod tests {
             panic!("User is not a teacher.");
         }
 
-        db.nuke_database().await.unwrap();
+        db.nuke_database().await?;
+        Ok(())
     }
 }
