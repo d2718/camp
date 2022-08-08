@@ -1,12 +1,46 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+use std::fmt::{Display, Write};
+
 pub mod auth;
 pub mod config;
 pub mod course;
 pub mod inter;
 pub mod store;
 pub mod user;
+
+#[derive(Debug)]
+pub enum UnifiedError {
+    Postgres(tokio_postgres::error::Error),
+    Auth(crate::auth::DbError),
+    Data(crate::store::DbError),
+    String(String),
+}
+
+impl From<tokio_postgres::error::Error> for UnifiedError {
+    fn from(e: tokio_postgres::error::Error) -> Self { Self::Postgres(e) }
+}
+impl From<crate::auth::DbError> for UnifiedError {
+    fn from(e: crate::auth::DbError) -> Self { Self::Auth(e) }
+}
+impl From<crate::store::DbError> for UnifiedError {
+    fn from(e: crate::store::DbError) -> Self { Self::Data(e) }
+}
+impl From<String> for UnifiedError {
+    fn from(e: String) -> Self { Self::String(e) }
+}
+
+impl Display for UnifiedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Postgres(e) => write!(f, "Underlying database error: {}", e),
+            Self::Auth(e) => write!(f, "Auth DB error: {}", e),
+            Self::Data(e) => write!(f, "Data DB error: {}", e),
+            Self::String(e) => write!(f, "Error: {}", e),
+        }
+    }
+}
 
 pub fn blank_string_means_none<S: AsRef<str>>(s: Option<S>) -> Option<S> {
     match s {

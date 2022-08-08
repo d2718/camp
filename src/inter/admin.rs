@@ -223,7 +223,7 @@ async fn upload_students(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respo
                 "Error uploading new students via CSV: {}\n\nCSV text:\n\n{}\n",
                 &e, &body
             );
-            return text_500(Some(e));
+            return text_500(Some(e.to_string()));
         }
     }
     {
@@ -262,7 +262,7 @@ async fn update_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response 
             log::error!(
                 "Error updating user {:?}: {}", &u, &e,
             );
-            return text_500(Some(e));
+            return text_500(Some(e.to_string()));
         }
         if let Err(e) = glob.refresh_users().await {
             log::error!(

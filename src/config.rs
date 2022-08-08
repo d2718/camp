@@ -2,7 +2,7 @@
 Structs to hold configuration data and global variables.
 */
 use std::collections::HashMap;
-use std::fmt::Write;
+use std::fmt::{Display, Write};
 use std::io::Cursor;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -17,6 +17,7 @@ use crate::{
     course::Course,
     inter,
     store::Store,
+    UnifiedError,
     user::{BaseUser, Role, Student, Teacher, User},
 };
 
@@ -116,7 +117,7 @@ pub struct Glob {
     pub addr: SocketAddr,
 }
 
-impl Glob {
+impl<'a> Glob {
     pub fn auth(&self) -> Arc<RwLock<auth::Db>> { self.auth.clone() }
     pub fn data(&self) -> Arc<RwLock<Store>>    { self.data.clone() }
 
@@ -151,30 +152,31 @@ impl Glob {
     ///   * Implement this for `User::Teacher` and `User::Student`.
     ///   * Generate random passwords upon insertion.
     /// 
-    pub async fn insert_user(&self, u: &User) -> Result<(), String> {
+    pub async fn insert_user(&self, u: &User) -> Result<(), UnifiedError> {
         log::trace!("Glob::insert_user( {:?} ) called.", u);
+
+        let data = self.data.read().await;
+        let mut client = data.connect().await?;
+        let t = client.transaction().await?;
 
         let salt = match u {
             User::Admin(base) => {
-                let data = self.data.read().await;
-                data.insert_admin(&base.uname, &base.email).await?
+                data.insert_admin(&t, &base.uname, &base.email).await?
             },
             User::Boss(base) => {
-                let data = self.data.read().await;
-                data.insert_boss(&base.uname, &base.email).await?
+                data.insert_boss(&t, &base.uname, &base.email).await?
             },
-            User::Teacher(t) => {
-                let data = self.data.read().await;
+            User::Teacher(teach) => {
                 data.insert_teacher(
-                    &t.base.uname,
-                    &t.base.email,
-                    &t.name
+                    &t,
+                    &teach.base.uname,
+                    &teach.base.email,
+                    &teach.name
                 ).await?
             }
             User::Student(s) => {
-                let data = self.data.read().await;
                 let mut studs = vec![s.clone()];
-                data.insert_students(&mut studs).await?;
+                data.insert_students(&t, &mut studs).await?;
                 // .unwrap()ping is fine here, because we just ensured `studs`
                 // was a vector of length exactly 1.
                 studs.pop().unwrap().base.salt
@@ -183,50 +185,22 @@ impl Glob {
 
         {
             let auth = self.auth.read().await;
-            if let Err(e) = auth.add_user(
-                u.uname(),
-                "new_password",
-                &salt,
-            ).await {
-                self.data.read().await.delete_user(u.uname()).await?;
-                return Err(format!("Unable to insert new user: {}", &e));
-            }
+            let mut auth_client = auth.connect().await?;
+            let auth_t = auth_client.transaction().await?;
+            auth.add_user(&auth_t, u.uname(), "new_password", &salt,).await?;
+            auth_t.commit().await?;
+        }
+
+        if let Err(e) = t.commit().await {
+            return Err(format!(
+                "Unable to commit transaction: {}\nWarning! Auth DB maybe out of sync with Data DB.", &e
+            ))?;
         }
 
         Ok(())
     }
 
-    async fn undo_upload_store_insert(
-        &self, unames: &[&str]
-    ) -> Result<(), String> {
-        log::trace!(
-            "Glob::undo_upload_store_insert( {:?} ) called.", unames
-        );
-
-        let mut errors = String::from(
-"There was an error inserting names into the auth database after they were inserted into the data DB.
-The following user names then encountered errors being *removed* from the data DB:\n "
-        );
-
-        let mut has_errors = false;
-        let data = self.data.read().await;
-        for uname in unames.iter() {
-            if let Err(e) = data.delete_user(*uname).await {
-                has_errors = true;
-                if let Err(we) = writeln!(&mut errors, "{}: {}", uname, e) {
-                    log::error!("Error generating error string!!!: {}", &we);
-                }
-            }
-        }
-
-        if has_errors {
-            Err(errors)
-        } else {
-            Ok(())
-        }
-    }
-
-    pub async fn upload_students(&self, csv_data: &str) -> Result<(), String> {
+    pub async fn upload_students(&self, csv_data: &str) -> Result<(), UnifiedError> {
         log::trace!(
             "Glob::upload_students( [ {} bytes of CSV body ] ) called.",
             &csv_data.len()
@@ -235,10 +209,35 @@ The following user names then encountered errors being *removed* from the data D
         let mut reader = Cursor::new(csv_data);
         let mut students = Student::vec_from_csv_reader(&mut reader)?;
         {
-            let data = self.data.read().await;
-            let n_studs = data.insert_students(&mut students).await?;
-            log::trace!("Inserted {} Students into store.", &n_studs);
+            let mut not_teachers: Vec<(&str, &str, &str)> = Vec::new();
+            for s in students.iter() {
+                if let Some(User::Teacher(_)) = self.users.get(&s.teacher) {
+                    /* This is the happy path. */
+                } else {
+                    not_teachers.push((&s.teacher, &s.last, &s.rest));
+                }
+            }
+
+            if !not_teachers.is_empty() {
+                let mut estr = String::from(
+                    "You have assigned students to the following unames who are not teachers:\n"
+                );
+                for (t, last, rest) in not_teachers.iter() {
+                    writeln!(&mut estr, "{} (assigned to {}, {})", t, last, rest)
+                        .map_err(|e| format!(
+                            "Error generating error message: {}\n(Task failed successfully, lol.)", &e
+                        ))?;
+                }
+                return Err(UnifiedError::String(estr));
+            }
         }
+
+        let data = self.data.read().await;
+        let mut data_client = data.connect().await?;
+        let data_t = data_client.transaction().await?;
+
+        let n_studs = data.insert_students(&data_t, &mut students).await?;
+        log::trace!("Inserted {} Students into store.", &n_studs);
 
         let new_password = "this is a new password".to_owned();
         let mut uname_refs: Vec<&str> = Vec::with_capacity(students.len());
@@ -252,38 +251,46 @@ The following user names then encountered errors being *removed* from the data D
 
         {
             let auth = self.auth.read().await;
-            match auth.add_users(
-                &uname_refs, &pword_refs, &salt_refs
-            ).await {
-                Ok(n) => { log::trace!("Successfully added {} students to both DBs.", n); },
-                Err(e) => {
-                    if let Err(addl_e) = self.undo_upload_store_insert(&uname_refs).await {
-                        let estr = format!(
-                            "Error inserting users into auth DB: {}\n\nADDITIONALLY:\n\n{}",
-                            &e, &addl_e
-                        );
-                        return Err(estr);
-                    }
-                }
-            }
+            let mut auth_client = auth.connect().await?;
+            let auth_t = auth_client.transaction().await?;
+
+            auth.add_users(
+                &auth_t, &uname_refs, &pword_refs, &salt_refs
+            ).await?;
+
+            auth_t.commit().await?;
+        }
+
+        if let Err(e) = data_t.commit().await {
+            return Err(format!(
+                "Unable to commit transaction: {}\nWarning! Auth DB maybe out of sync with Data DB.", &e
+            ))?;
         }
 
         Ok(())
     }
 
-    pub async fn update_user(&self, u: &User) -> Result<(), String> {
+    pub async fn update_user(&self, u: &User) -> Result<(), UnifiedError> {
         log::trace!("Glob::update_user( {:?} ) called.", u);
 
         let data = self.data.read().await;
+        let mut client = data.connect().await?;
+        let t = client.transaction().await?;
+
         match u {
             User::Admin(_) => {
-                data.update_admin(u.uname(), u.email()).await?;
+                data.update_admin(&t, u.uname(), u.email()).await?;
             },
             User::Boss(_) => {
-                data.update_boss(u.uname(), u.email()).await?;
+                data.update_boss(&t, u.uname(), u.email()).await?;
             },
-            User::Teacher(t) => {
-                data.update_teacher(&t.base.uname, &t.base.email, &t.name).await?;
+            User::Teacher(teach) => {
+                data.update_teacher(
+                    &t,
+                    &teach.base.uname,
+                    &teach.base.email,
+                    &teach.name
+                ).await?;
             },
             User::Student(s) => {
                 /*  Here we have to replace several of the fields of `s` from
@@ -297,12 +304,12 @@ The following user names then encountered errors being *removed* from the data D
                             return Err(format!(
                                 "{:?} is not a Student ({}).",
                                 &s.base.uname, &x.role()
-                            ));
+                            ))?;
                         },
                     },
                     None => { return Err(format!(
                         "{:?} is not a User in the database.", &s.base.uname
-                    )); },
+                    ))?; },
                 };
                 let mut s = s.clone();
                 s.fall_exam   = old_u.fall_exam.clone();
@@ -312,34 +319,133 @@ The following user names then encountered errors being *removed* from the data D
                 s.fall_notices   = old_u.fall_notices;
                 s.spring_notices = old_u.spring_notices;
 
-                data.update_student(&s).await?;
+                data.update_student(&t, &s).await?;
             },
         }
 
+        t.commit().await?;
+
         Ok(())
     }
 
-    pub async fn delete_user(&self, uname: &str) -> Result<(), String> {
+    pub async fn delete_user(&self, uname: &str) -> Result<(), UnifiedError> {
         log::trace!("Glob::delete_user( {:?} ) called.", uname);
 
         {
-            let data = self.data.read().await;
-            data.delete_user(uname).await?;
+            let u = match self.users.get(uname) {
+                None => {
+                    return Err(UnifiedError::String(format!("No User {:?}.", uname)));
+                },
+                Some(u) => u,
+            };
+
+            if u.role() == Role::Teacher {
+                let studs = self.get_students_by_teacher(u.uname());
+                if !studs.is_empty() {
+                    let mut estr = format!(
+                        "The following Students are still assigned to Teacher {:?}\n",
+                        u.uname()
+                    );
+                    for kid in studs.iter() {
+                        estr.push_str(kid.uname());
+                        estr.push('\n');
+                    }
+                    return Err(UnifiedError::String(estr));
+                }
+            }
         }
+
+        let data = self.data.read().await;
+        let mut data_client = data.connect().await?;
+        let data_t = data_client.transaction().await?;
+
+        data.delete_user(&data_t, uname).await?;
         {
             let auth = self.auth.read().await;
-            auth.delete_users(&[uname]).await?;
+            let mut auth_client = auth.connect().await?;
+            let auth_t = auth_client.transaction().await?;
+            auth.delete_users(&auth_t, &[uname]).await?;
+            auth_t.commit().await?;
+        }
+
+        if let Err(e) = data_t.commit().await {
+            return Err(format!(
+                "Unable to commit transaction: {}\nWarning! Auth DB maybe out of sync with Data DB.", &e
+            ))?;
         }
 
         Ok(())
     }
+
+    pub fn get_students_by_teacher(
+        &'a self,
+        teacher_uname: &'_ str
+    ) -> Vec<&'a User> {
+        log::trace!("Glob::get_students_by_teacher( {:?} ) called.", teacher_uname);
+
+        let mut stud_refs: Vec<&User> = Vec::new();
+        for (_, u) in self.users.iter() {
+            if let User::Student(ref s) = u {
+                if &s.teacher == teacher_uname {
+                    stud_refs.push(u);
+                }
+            }
+        }
+
+        return stud_refs;
+    }
+}
+
+async fn insert_default_admin_into_data_db(
+    cfg: &Cfg,
+    data: &Store,
+) -> Result<User, UnifiedError> {
+    {
+        let mut client = data.connect().await?;
+        let t = client.transaction().await?;
+        data.insert_admin(
+            &t,
+            &cfg.default_admin_uname,
+            &cfg.default_admin_password
+        ).await?;
+        t.commit().await?;
+    }
+
+    match data.get_user_by_uname(&cfg.default_admin_uname).await {
+        Err(e) => Err(format!(
+            "Error attempting to retrieve newly-inserted default Admin user: {}", &e
+        ))?,
+        Ok(None) => Err(format!(
+            "Newly-inserted Admin still not present in Data DB for some reason."
+        ))?,
+        Ok(Some(u)) => Ok(u)
+    }
+}
+
+async fn insert_default_admin_into_auth_db(
+    cfg: &Cfg,
+    u: &User,
+    auth: &auth::Db
+) -> Result<(), UnifiedError> {
+    let mut client = auth.connect().await?;
+    let t = client.transaction().await?;
+    auth.add_user(
+        &t,
+        u.uname(),
+        &cfg.default_admin_password,
+        u.salt()
+    ).await?;
+    t.commit().await?;
+
+    Ok(())
 }
 
 /// Loads system configuration and ensures all appropriate database tables
 /// exist.
 ///
 /// Also assures existence of default admin.
-pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob, String> {
+pub async fn load_configuration<P: AsRef<Path>>(path: P)
+-> Result<Glob, UnifiedError> {
     let cfg = Cfg::from_file(path.as_ref())?;
     log::info!("Configuration file read:\n{:#?}", &cfg);
 
@@ -347,15 +453,17 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob, String>
     let auth_db = auth::Db::new(cfg.auth_db_connect_string.clone());
     if let Err(e) = auth_db.ensure_db_schema().await {
         let estr = format!("Unable to ensure state of auth DB: {}", &e);
-        return Err(estr);
+        return Err(estr)?;
     }
     log::trace!("...auth DB okay.");
+    let n_old_keys = auth_db.cull_old_keys().await?;
+    log::info!("Removed {} expired keys from Auth DB.", &n_old_keys);
 
     log::trace!("Checking state of data DB...");
     let data_db = Store::new(cfg.data_db_connect_string.clone());
     if let Err(e) = data_db.ensure_db_schema().await {
         let estr = format!("Unable to ensure state of data DB: {}", &e);
-        return Err(estr);
+        return Err(estr)?;
     }
     log::trace!("...data DB okay.");
 
@@ -368,34 +476,19 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob, String>
                 "Error attempting to check existence of default Admin ({}) in data DB: {}",
                 &cfg.default_admin_uname, &e
             );
-            return Err(estr);
+            return Err(estr)?;
         },
         Ok(None) => {
             log::info!(
                 "Default Admin ({}) doesn't exist in data DB; inserting.",
                 &cfg.default_admin_uname
             );
-            if let Err(e) = data_db.insert_admin(
-                &cfg.default_admin_uname,
-                &cfg.default_admin_email
-            ).await {
-                let estr = format!(
-                    "Error inserting default Admin into data DB: {}",
-                    &e
-                );
-                return Err(estr);
-            }
-            match data_db.get_user_by_uname(&cfg.default_admin_uname).await {
-                Err(e) => {
-                    let estr = format!("Error attempting to retrieve newly-inserted default Admin: {}", &e);
-                    return Err(estr);
-                },
-                Ok(None) => {
-                    let estr = format!("Newly-inserted default Admin still not there for some reason.");
-                    return Err(estr);
-                },
-                Ok(Some(u)) => u,
-            }
+
+            let u = insert_default_admin_into_data_db(&cfg, &data_db).await
+                .map_err(|e| format!(
+                    "Error attempting to insert default Admin user into Data DB: {}", &e
+                ))?;
+            u
         },
         Ok(Some(u)) => u,
     };
@@ -409,21 +502,17 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob, String>
     ).await {
         Err(e) => {
             let estr = format!("Error checking existence of default Admin in auth DB: {}", &e);
-            return Err(estr);
+            return Err(estr)?;
         },
         Ok(AuthResult::BadPassword) => {
             log::warn!("Default Admin ({}) not using default password.", default_admin.uname());
         },
         Ok(AuthResult::NoSuchUser) => {
             log::info!("Default Admin ({}) doesn't exist in auth DB; inserting.", default_admin.uname());
-            if let Err(e) = auth_db.add_user(
-                default_admin.uname(),
-                &cfg.default_admin_password,
-                default_admin.salt()
-            ).await {
-                let estr = format!("Error inserting default Admin into auth DB: {}", &e);
-                return Err(estr);
-            };
+            insert_default_admin_into_auth_db(&cfg, &default_admin, &auth_db).await
+                .map_err(|e| format!(
+                    "Error attempting to insert default Admin into Auth DB: {}", &e
+                ))?;
             log::trace!("Default Admin inserted into auth DB.");
         },
         Ok(AuthResult::Ok) => {
@@ -431,7 +520,7 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P) -> Result<Glob, String>
         },
         Ok(x) => {
             let estr = format!("Default Admin password check resulted in {:?}, which just doesn't make sense.", &x);
-            return Err(estr);
+            return Err(estr)?;
         },
     }
     log::trace!("Default Admin OK in auth DB.");

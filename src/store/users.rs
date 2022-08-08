@@ -189,12 +189,10 @@ impl Store {
     */
     pub async fn delete_user(
         &self,
+        t: &Transaction<'_>,
         uname: &str,
     ) -> Result<(), DbError> {
         log::trace!("Store::delete_user( {:?} ) called.", uname);
-
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
 
         /*
         JFC the type annotations here.
@@ -247,7 +245,6 @@ impl Store {
         if n == 0 {
             Err(DbError(format!("There is no user with uname {:?}.", uname)))
         } else {
-            t.commit().await?;
             Ok(())
         }
     }
@@ -324,68 +321,59 @@ impl Store {
 
     pub async fn insert_admin(
         &self,
+        t: &Transaction<'_>,
         uname: &str,
         email: &str,
     ) -> Result<String, DbError> {
         log::trace!("Store::insert_admin( {:?},{:?} ) called.", uname, email);
 
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
-
         let salt = self.insert_base_user(&t, uname, email, Role::Admin).await?;
 
-        t.commit().await?;
         log::trace!("Inserted Admin {:?} ({}).", uname, email);
         Ok(salt)
     }
 
     pub async fn update_admin(
         &self,
+        t: &Transaction<'_>,
         uname: &str,
         email: &str,
     ) -> Result<(), DbError> {
         log::trace!("update_admin( {:?}, {:?} ) called.", uname, email);
 
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
         self.update_base_user(&t, uname, email).await?;
-        t.commit().await?;
         Ok(())
     }
 
     pub async fn insert_boss(
         &self,
+        t: &Transaction<'_>,
         uname: &str,
         email: &str,
     ) -> Result<String, DbError> {
         log::trace!("Store::insert_boss( {:?}, {:?} ) called.", uname, email);
 
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
-
         let salt = self.insert_base_user(&t, uname, email, Role::Boss).await?;
 
-        t.commit().await?;
         log::trace!("Inserted Boss {:?} ({})", uname, email);
         Ok(salt)
     }
 
     pub async fn update_boss(
         &self,
+        t: &Transaction<'_>,
         uname: &str,
         email: &str,
     ) -> Result<(), DbError> {
         log::trace!("update_admin( {:?}, {:?} ) called.", uname, email);
 
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
         self.update_base_user(&t, uname, email).await?;
-        t.commit().await?;
         Ok(())
     }
 
     pub async fn insert_teacher(
         &self,
+        t: &Transaction<'_>,
         uname: &str,
         email: &str,
         name: &str,
@@ -395,9 +383,6 @@ impl Store {
             uname, email, name
         );
 
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
-
         let salt = self.insert_base_user(&t, uname, email, Role::Teacher).await?;
 
         t.execute(
@@ -406,13 +391,13 @@ impl Store {
             &[&uname, &name]
         ).await?;
 
-        t.commit().await?;
         log::trace!("Inserted Teacher {:?}, ({}, {})", uname, name, email);
         Ok(salt)
     }
 
     pub async fn update_teacher(
         &self,
+        t: &Transaction<'_>,
         uname: &str,
         email: &str,
         name: &str,
@@ -421,9 +406,6 @@ impl Store {
             "Store::update_teacher( {:?}, {:?}, {:?} ) called.",
             uname, email, name
         );
-
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
 
         self.update_base_user(&t, uname, email).await?;
 
@@ -442,8 +424,6 @@ impl Store {
                 uname, &n_updated
             );
         }
-
-        t.commit().await?;
         Ok(())
     }
 
@@ -451,6 +431,7 @@ impl Store {
     /// the Student objects salts are set.
     pub async fn insert_students(
         &self,
+        t: &Transaction<'_>,
         students: &mut [Student]
     ) -> Result<usize, DbError> {
         log::trace!("Store::insert_students( [ {} students ] ) called.", students.len());
@@ -458,9 +439,7 @@ impl Store {
         let new_unames: Vec<&str> = students.iter()
             .map(|s| s.base.uname.as_str())
             .collect();
-
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
+    
         let preexisting_uname_query = t.prepare_typed(
             "SELECT uname, role FROM users WHERE uname = ANY($1)",
             &[Type::TEXT_ARRAY]
@@ -635,8 +614,6 @@ impl Store {
             }
         }
 
-        t.commit().await?;
-
         for (stud, salt) in students.iter_mut().zip(salts.drain(..)) {
             stud.base.salt = salt;
         }
@@ -648,11 +625,12 @@ impl Store {
         Ok(n_stud_inserted as usize)
     }
 
-    pub async fn update_student(&self, u: &Student) -> Result<(), DbError> {
+    pub async fn update_student(
+        &self,
+        t: &Transaction<'_>,
+        u: &Student
+    ) -> Result<(), DbError> {
         log::trace!("Store::update_student( [ {:?} ] ) called.", &u.base.uname);
-
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
 
         self.update_base_user(&t, &u.base.uname, &u.base.email).await?;
 
@@ -683,7 +661,6 @@ impl Store {
             );
         }
 
-        t.commit().await?;
         Ok(())
     }
 
@@ -935,6 +912,8 @@ This absolutely shouldn't be able to happen, but here we are.",
 mod tests {
     use super::*;
 
+    use std::fmt::Debug;
+
     use serial_test::serial;
 
     use crate::tests::ensure_logging;
@@ -982,31 +961,38 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn insert_users() {
+    async fn insert_users() -> Result<(), Box<dyn Debug>> {
         ensure_logging();
 
         let db = Store::new(TEST_CONNECTION.to_owned());
-        db.ensure_db_schema().await.unwrap();
+        db.ensure_db_schema().await?;
+
+        let mut client = db.connect().await?;
+        let t = client.transaction().await?;
 
         for (uname, email) in ADMINS.iter() {
-            db.insert_admin(uname, email).await.unwrap();
+            db.insert_admin(&t, uname, email).await.unwrap();
         }
         for (uname, email) in BOSSES.iter() {
-            db.insert_boss(uname, email).await.unwrap();
+            db.insert_boss(&t, uname, email).await.unwrap();
         }
         for (uname, email, name) in TEACHERS.iter() {
-            db.insert_teacher(uname, email, name).await.unwrap();
+            db.insert_teacher(&t, uname, email, name).await.unwrap();
         }
 
         let mut studs = Student::vec_from_csv_reader(
             std::io::Cursor::new(STUDENTS_CSV.as_bytes())
         ).unwrap();
         assert_eq!(
-            db.insert_students(&mut studs).await.unwrap(),
+            db.insert_students(&t, &mut studs).await.unwrap(),
             studs.len()
         );
 
+        t.commit().await?;
+
         let mut umap = db.get_users().await.unwrap();
+
+        let t = client.transaction().await?;
 
         for (uname, email) in ADMINS.iter() {
             let u = umap.remove(*uname).unwrap();
@@ -1014,7 +1000,7 @@ mod tests {
                 (*uname, *email, Role::Admin),
                 (u.uname(), u.email(), u.role())
             );
-            db.delete_user(uname).await.unwrap();
+            db.delete_user(&t, uname).await?;
         }
         for (uname, email) in BOSSES.iter() {
             let u = umap.remove(*uname).unwrap();
@@ -1022,7 +1008,7 @@ mod tests {
                 (*uname, *email, Role::Boss),
                 (u.uname(), u.email(), u.role())
             );
-            db.delete_user(uname).await.unwrap();
+            db.delete_user(&t, uname).await?;
         }
 
         for (uname, email, _) in TEACHERS.iter() {
@@ -1039,12 +1025,14 @@ mod tests {
                 x @ _ => panic!("Expected User::Student, got {:?}", &x),
             };
             assert!(same_students(&stud, &s));
-            db.delete_user(&stud.base.uname).await.unwrap();
+            db.delete_user(&t, &stud.base.uname).await.unwrap();
         }
 
         for (uname, _, _) in TEACHERS.iter() {
-            db.delete_user(uname).await.unwrap();
+            db.delete_user(&t, uname).await.unwrap();
         }
+
+        t.commit().await?;
 
         db.nuke_database().await.unwrap();
     }
