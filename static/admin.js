@@ -648,6 +648,10 @@ COURSES section
 
 */
 
+function expand_course(evt) {
+    
+}
+
 function add_course_to_display(c) {
     console.log("adding course to display", c);
 
@@ -662,6 +666,20 @@ function add_course_to_display(c) {
     td.appendChild(cite);
     tr.appendChild(td);
     tr.appendChild(text_td(c.chapters.length));
+
+    td = document.createElement("td");
+    
+    expand = document.createElement("button");
+    expand.setAttribute("data-sym", c.sym);
+    set_text(expand, "\u2304");
+    td.appendChild(expand);
+
+    ebutt = document.createElement("button");
+    ebutt.setAttribute("data-sym", c.sym);
+    label("edit", ebutt);
+    td.appendChild(ebutt);
+
+    tr.appendChild(td);
 
     DISPLAY.course_tbody.appendChild(tr);
 }

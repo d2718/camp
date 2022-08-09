@@ -62,6 +62,7 @@ table.user-table tr:nth-child(even) > td {
 
 button {
     padding: 0.5ex;
+    min-width: 2em;
 }
 
 dialog.edit {
