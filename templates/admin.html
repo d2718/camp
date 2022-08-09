@@ -311,6 +311,36 @@ const AUTH = {
             </div>
         </dialog>
 
+        <dialog id="alter-chapter" class="edit">
+            <h1>Chapter Details</h1>
+            <form name="alter-chapter" method="dialog">
+                <label for="alter-chapter-seq">chapter #</label>
+                <input type="number" name="seq" id="alter-chapter-seq"
+                       step="1", min="0" required>
+                <label for="alter-chapter-title">title</label>
+                <input name="title" id="alter-chapter-title">
+                <label for="alter-chapter-subject">subject</label>
+                <input name="subject" id="alter-chapter-subject">
+                <label for="alter-chapter-weight">weight</label>
+                <input type="number" name="weight" id="alter-chapter=weight"
+                       step="0.01", min="0.01" value="1.0">
+                <button id="alter-chapter-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="alter-chapter-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+                
+                <input type="hidden" name="id">
+                <hr>
+                <div class="center">
+                    <button id="delete-chapter">
+                        <label>delete this Chapter</label>
+                    </button>
+                </div>
+            </form>
+        </dialog>
+
         <dialog id="are-you-sure">
             <h1>&iquest;Are you sure?</h1>
             <p id="are-you-sure-message"></p>

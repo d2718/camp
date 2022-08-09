@@ -149,7 +149,6 @@ impl<'a> Glob {
     /// 
     /// XXX TODO XXX
     /// 
-    ///   * Implement this for `User::Teacher` and `User::Student`.
     ///   * Generate random passwords upon insertion.
     /// 
     pub async fn insert_user(&self, u: &User) -> Result<(), UnifiedError> {

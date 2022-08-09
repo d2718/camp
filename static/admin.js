@@ -806,6 +806,15 @@ function populate_course_chapters(c) {
     tab.appendChild(tbody);
 
     td_container.appendChild(tab);
+
+    const div = document.createElement("div");
+    const add_butt = document.createElement("button");
+    label("+ append chapter", add_butt);
+    //
+    // TODO: Add event handler.
+    //
+    div.appendChild(add_butt);
+    td_container.appendChild(div);
 }
 
 function populate_course_table_row(c) {

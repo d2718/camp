@@ -127,6 +127,8 @@ pub async fn api(
         "upload-students" => upload_students(body, glob.clone()).await,
         "populate-courses" => populate_courses(glob.clone()).await,
         "upload-course" => upload_course(body, glob.clone()).await,
+        "add-course" => add_course(body, glob.clone()).await,
+        "delete-course" => delete_course(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognizable x-camp-action value.", x)
         ),
@@ -254,7 +256,7 @@ async fn update_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response 
         Ok(u) => u,
         Err(e) => {
             log::error!(
-                "Error deserializing JSON {:?} as BaseUser: {}",
+                "Error deserializing JSON {:?} as User: {}",
                 &body, &e
             );
             return text_500(Some("Unable to deserialize User struct.".to_owned()));
@@ -337,6 +339,22 @@ async fn populate_courses(glob: Arc<RwLock<Glob>>) -> Response {
     ).into_response()
 }
 
+async fn refresh_and_repopulate_courses(glob: Arc<RwLock<Glob>>) -> Response {
+    {
+        let mut glob = glob.write().await;
+        if let Err(e) = glob.refresh_courses().await {
+            log::error!(
+                "Error refreshing course hash from database: {}", &e
+            );
+            return text_500(Some(
+                format!("Unable to refresh course data from database: {}", &e)
+            ));
+        }
+    }
+
+    populate_courses(glob).await
+}
+
 async fn upload_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
     let body = match body {
         Some(body) => body,
@@ -367,15 +385,101 @@ async fn upload_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respons
         };
     }
 
-    {
-        let mut glob = glob.write().await;
-        if let Err(e) = glob.refresh_courses().await {
+    refresh_and_repopulate_courses(glob).await
+}
+
+async fn add_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires application/json body describing the Course.".to_owned()
+        ); },
+    };
+
+    let crs: Course = match serde_json::from_str(&body) {
+        Ok(crs) => crs,
+        Err(e) => {
             log::error!(
-                "Error refreshing course hash from database: {}", &e
+                "Error deserializing JSON {:?} as Course: {}",
+                &body, &e
             );
-            return text_500(Some("Unable to reread courses from database.".to_owned()));
-        }
+            return text_500(Some("Unable to deserialize to Course struct.".to_owned()));
+        },
+    };
+
+    {
+        let glob = glob.read().await;
+        let data = glob.data();
+        match data.read().await.insert_courses(&vec![crs]).await {
+            Ok((n_crs, n_ch)) => {
+                log::trace!(
+                    "Inserted {} Cours(es) and {} Chapter(s) into the Data DB.",
+                    n_crs, n_ch
+                );
+            },
+            Err(e) => {
+                return text_500(Some(e.into()));
+            },
+        };
     }
 
-    populate_courses(glob).await
+    refresh_and_repopulate_courses(glob).await
+}
+
+async fn delete_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires sym of Course in body.".to_owned()
+        ); },
+    };
+
+    {
+        let glob = glob.read().await;
+        let data = glob.data();
+        match data.read().await.delete_course(&body).await {
+            Ok((n_crs, n_ch)) => {
+                log::trace!(
+                    "Deleted {} Course, {} Chapters from Data DB.",
+                    n_crs, n_ch
+                );
+            },
+            Err(e) => {
+                return text_500(Some(e.into()));
+            },
+        };
+    }
+
+    refresh_and_repopulate_courses(glob).await
+}
+
+async fn delete_chapter(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires id of Chapter in body.".to_owned()
+        ); },
+    };
+
+    let ch_id: i64 = match body.parse() {
+        Ok(n) => n,
+        Err(e) => {
+            return respond_bad_request(format!(
+                "Unable to parse body of request {:?} as Chapter id: {}",
+                &body, &e
+            ));
+        },
+    };
+
+    {
+        let glob = glob.read().await;
+        let data = glob.data();
+        if let Err(e) = data.read().await.delete_chapter(ch_id).await {
+            return text_500(Some(format!(
+                "Unable to delete Chapter: {}", &e
+            )));
+        };
+    }
+
+    refresh_and_repopulate_courses(glob).await
 }

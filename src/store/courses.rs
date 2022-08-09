@@ -147,6 +147,98 @@ impl Store {
         Ok((n_courses, n_chapters as usize))
     }
 
+    pub async fn insert_chapters(
+        &self,
+        chapters: &[Chapter]
+    ) -> Result<usize, DbError> {
+        log::trace!("Store::insert_chapter( [ {} chapters ] ) called.", chapters.len());
+
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+
+        let insert_chapter_query = t.prepare_typed(
+            "INSERT INTO chapters
+                (course, sequence, title, subject, weight)
+                VALUES ($1, $2, $3, $4, $5)",
+            &[Type::INT8, Type::INT2, Type::TEXT, Type::TEXT, Type::FLOAT4]
+        ).await?;
+
+        let mut n_chapters: u64 = 0;
+
+        // TODO: Switch this section to use concurrent insertion, like with
+        //       FuturesUnordered.
+        for ch in chapters.iter() {
+            let n = t.execute(
+                &insert_chapter_query,
+                &[&ch.course_id, &ch.seq, &ch.title, &ch.subject, &ch.weight]
+            ).await?;
+            n_chapters += n;
+        }
+
+        t.commit().await?;
+
+        Ok(n_chapters as usize)
+    }
+
+    pub async fn delete_chapter(
+        &self,
+        id: i64
+    ) -> Result<(), DbError> {
+        log::trace!("Store::delete_chapter( {} ) called.", &id);
+
+        let client = self.connect().await?;
+        match client.execute(
+            "DELETE FROM chapters WHERE id = $1",
+            &[&id]
+        ).await {
+            Err(e) => { return Err(e.into()); },
+            Ok(0) => { return Err(DbError(format!(
+                "No Chapter with id {}.", &id
+            ))); },
+            Ok(1) => { log::trace!("1 chapter record deleted."); },
+            Ok(n) => {
+                log::warn!(
+                    "Deleting single chapter w/id {} affected {} rows.",
+                    &id, &n
+                );
+            },
+        }
+
+        Ok(())
+    }
+
+    pub async fn delete_course(
+        &self,
+        sym: &str
+    ) -> Result<(usize, usize), DbError> {
+        log::trace!("Store::delete_course( {:?} ) called.", sym);
+
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+
+        let n_chapters = t.execute(
+            "DELETE FROM chapters
+                WHERE course IN (
+                    SELECT id FROM courses
+                    WHERE sym = $1
+                )",
+            &[&sym]
+        ).await?;
+
+        let n_courses = t.execute(
+            "DELETE FROM courses
+                WHERE sym = $1",
+            &[&sym]
+        ).await?;
+
+        t.commit().await?;
+        log::trace!(
+            "{} Courses, {} Chapters successfully deleted.",
+            n_courses, n_chapters
+        );
+        Ok((n_courses as usize, n_chapters as usize))
+    }
+
     pub async fn get_course_by_sym(
         &self,
         sym: &str
