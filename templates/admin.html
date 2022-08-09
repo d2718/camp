@@ -108,6 +108,7 @@ const AUTH = {
             </table>
 
             <div>
+                <button id="add-course"><label>add new Course</label></button>
                 <button id="upload-course"><label>upload Course file</label></button>
             </div>
         </div>
@@ -187,7 +188,8 @@ const AUTH = {
                 <input type="email" name="email" id="alter-teacher-email"
                        required>
                 <label for="alter-teacher-name">name</label>
-                <input name="name" id="alter-teacher-name" required>
+                <input name="name" id="alter-teacher-name"
+                       required pattern=".*\S.*">
                 <button id="alter-teacher-cancel">
                     <label class="cancel">cancel</label>
                 </button>
@@ -210,7 +212,8 @@ const AUTH = {
                 <input name="uname" id="alter-student-uname"
                        required pattern="^[a-zA-Z0-9]+$">
                 <label for="alter-student-last">last</label>
-                <input name="last" id="alter-student-last" required>
+                <input name="last" id="alter-student-last"
+                       required pattern=".*\S.*">
                 <label for="alter-student-rest">rest</label>
                 <input name="rest" id="alter-student-rest" required>
                 <label for="alter-student-teacher">teacher</label>
@@ -277,6 +280,35 @@ const AUTH = {
                     <label class="confirm">confirm</label>
                 </button>
             </form>
+        </dialog>
+
+        <dialog id="alter-course" class="edit">
+            <h1>Course Data</h1>
+            <form name="alter-course" method="dialog">
+                <label for="alter-course-sym">sym</label>
+                <input name="sym" id="alter-course-id"
+                       reqired pattern="^[a-zA-Z0-9]+$">
+                <label for="alter-course-title">course title</label>
+                <input name="title" id="alter-course-title"
+                       required pattern="*.\S*.">
+                <label for="alter-course-level">level</label>
+                <input type="number" name="level" id="alter-course-level"
+                       min="0.000" max="15.000" step="0.0001" required>
+                <label for="alter-course-book">textbook</label>
+                <input name="book" id="alter-course-book">
+                <button id="alter-course-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="alter-course-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+            </form>
+            <hr>
+            <div class="center">
+                <button id="delete-course">
+                    <label>delete this Course</label>
+                </button>
+            </div>
         </dialog>
 
         <dialog id="are-you-sure">

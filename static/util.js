@@ -11,6 +11,7 @@ This script should be loaded synchronously at the bottom of the <BODY>, and
 other scripts should be loaded with the DEFER attribute, to assure this loads
 ahead of them.
 */
+"use strict";
 
 function ensure_on_load(callback) {
     if(document.readystate == "complete") {
@@ -52,6 +53,11 @@ function text_td(text) {
     const td = document.createElement("td");
     td.appendChild(document.createTextNode(text));
     return td;
+}
+function text_th(text) {
+    const th = document.createElement("th");
+    th.appendChild(document.createTextNode(text));
+    return th;
 }
 function label(text, elt) {
     const lab = document.createElement("label");

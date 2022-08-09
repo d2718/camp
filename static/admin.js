@@ -7,6 +7,8 @@ The util.js script must load before this one. It should be loaded
 synchronously at the bottom of the <BODY>, and this should be
 DEFERred.
 */
+"use strict";
+
 const API_ENDPOINT = "/admin";
 const STATE = {
     error_count: 0
@@ -35,6 +37,7 @@ const DISPLAY = {
     student_upload: document.getElementById("upload-students-dialog"),
     student_paste: document.getElementById("paste-students-dialog"),
     course_tbody:  document.querySelector("table#course-table > tbody"),
+    course_edit:   document.getElementById("alter-course"),
     course_upload: document.getElementById("upload-course-dialog"),
 };
 
@@ -648,15 +651,167 @@ COURSES section
 
 */
 
-function expand_course(evt) {
-    
+function edit_course(evt) {
+    const sym = this.getAttribute("data-sym");
+    const form = document.forms['alter-course'];
+    const del = document.getElementById("delete-course");
+
+    if(sym) {
+        const c = DATA.courses.get(sym);
+        form.elements['sym'].value = c.sym;
+        form.elements['sym'].disabled = true;
+        form.elements['sym'].required = false;
+        form.elements['title'].value = c.title;
+        form.elements['level'].value = c.level;
+        form.elements['book'].value = c.book || "";
+        del.setAttribute("data-sym", sym);
+        del.disabled = false;
+    } else {
+        for(const ipt of form.elements) {
+            ipt.value = "";
+        }
+        form.elements["sym"].disabled = false;
+        form.elements["sym"].required = true;
+        del.removeAttribute("data-sym");
+        del.disabled = true;
+    }
+
+    DISPLAY.course_edit.showModal();
 }
 
-function add_course_to_display(c) {
-    console.log("adding course to display", c);
+document.getElementById("add-course")
+    .addEventListener("click", edit_course);
 
+function edit_course_submit() {
+    const form = document.forms['alter-course'];
+    const data = new FormData(form);
+    // Manually ensure possibly-disabled input value.
+    const sym_input = form.elements['sym'];
+    data.set("sym", sym_input.value);
+
+    const sym = data.get("sym");
+    const title = (data.get("title") || "").trim();
+    const level = Number(data.get("level"));
+    if(!level) {
+        RQ.add_err("Course level must be a decimal number reflecting its position in the grade-level sequence.");
+        return;
+    }
+    let book = data.get("book").trim();
+    if(book == "") { book = null; }
+
+    let c = DATA.courses.get(sym);
+    if(c) {
+        // If .get()ting from DATA.courses returns an object, that means
+        // we are altering an extant course. We update the old course's values
+        // to those from the form, leaving the other values intact.
+        c.title = title;
+        c.level = level;
+        c.book = book;
+        // This function doesn't alter any chapters, so we empty this and
+        // send less unnecessary data to the server.
+        c.chapters = [];
+    } else {
+        // .get()ting from DATA.courses returned nothing, which means we are
+        // creating a new course. We build the course object to send to
+        // the server.
+        c = {
+            // This value doesn't matter, as it will be set for us when
+            // it's inserted into the database.
+            "id": 0,
+            "sym": sym,
+            "title": title,
+            "level": level,
+            "book": book,
+            "chapters": [], // No chapters yet!
+        };
+    }
+
+    DISPLAY.course_edit.close();
+    if(sym_input.disabled) {
+        request_action("update-course", c, `Updating course ${sym} (${title}).`);
+    } else {
+        request_action("add-course", c, `Adding new course ${sym} (${title}).`);
+    }
+}
+
+document.getElementById("alter-course-cancel")
+    .addEventListener("click", (evt) => {
+        evt.preventDefault();
+        DISPLAY.course_edit.close();
+    });
+document.getElementById("alter-course-confirm")
+    .addEventListener("click", edit_course_submit);
+
+async function delete_course_submit(evt) {
+    const sym = this.getAttribute("data-sym");
+    const c = DATA.courses.get(sym);
+    const q = `Are you sure you want to delete Course ${sym} (${c.title})?`;
+    if(await are_you_sure(q)) {
+        DISPLAY.course_edit.close();
+        request_action("delete-course", sym, `Deleting Course ${sym} (${c.title}).`);
+    }
+}
+
+document.getElementById("delete-course")
+    .addEventListener("click", delete_course_submit);
+
+function toggle_chapter_display(evt) {
+    const sym = this.getAttribute("data-sym");
+    let tr = document.querySelector(`tr[data-chapters="${sym}"]`);
+    if(tr.style.display == "table-row") {
+        tr.style.display = "none";
+        set_text(this, "\u2304");
+        this.setAttribute("title", "show chapter list");
+    } else {
+        tr.style.display = "table-row";
+        set_text(this, "\u2303");
+        this.setAttribute("title", "hide chapter list");
+    }
+}
+
+function populate_course_chapters(c) {
+    const sym = c.sym;
+    const td_container = document.querySelector(`tr[data-chapters="${sym}"] > td`);
+    recursive_clear(td_container);
+
+    const tab = document.createElement("table");
+    tab.id = `${sym}-chapters`;
+    tab.setAttribute("class", "chapter-table");
+
+    const thead = document.createElement("thead");
     const tr = document.createElement("tr");
-    tr.setAttribute("data-sym", c.sym);
+    tr.appendChild(text_th("#"));
+    tr.appendChild(text_th("title"));
+    tr.appendChild(text_th("subject"));
+    tr.appendChild(text_th("weight"));
+    tr.appendChild(text_th("actions"));
+    thead.appendChild(tr);
+    tab.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    for(const ch of c.chapters) {
+        const tr = document.createElement("tr");
+        tr.setAttribute("data-id", ch.id);
+        tr.appendChild(text_td(ch.seq));
+        tr.appendChild(text_td(ch.title));
+        tr.appendChild(text_td(ch.subject || ""));
+        tr.appendChild(text_td(ch.weight));
+        const td = document.createElement("td");
+        //
+        // Insert edit action buttons here.
+        //
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+    }
+    tab.appendChild(tbody);
+
+    td_container.appendChild(tab);
+}
+
+function populate_course_table_row(c) {
+    const tr = DISPLAY.course_tbody.querySelector(`tr[data-sym="${c.sym}"]`);
+    recursive_clear(tr);
+
     tr.appendChild(text_td(c.sym));
     tr.appendChild(text_td(c.title));
     tr.appendChild(text_td(c.level));
@@ -669,19 +824,20 @@ function add_course_to_display(c) {
 
     td = document.createElement("td");
     
-    expand = document.createElement("button");
+    const expand = document.createElement("button");
     expand.setAttribute("data-sym", c.sym);
     set_text(expand, "\u2304");
+    expand.setAttribute("title", "show chapter list");
+    expand.addEventListener("click", toggle_chapter_display);
     td.appendChild(expand);
 
-    ebutt = document.createElement("button");
+    const ebutt = document.createElement("button");
     ebutt.setAttribute("data-sym", c.sym);
     label("edit", ebutt);
+    ebutt.addEventListener("click", edit_course);
     td.appendChild(ebutt);
 
     tr.appendChild(td);
-
-    DISPLAY.course_tbody.appendChild(tr);
 }
 
 function populate_courses(r) {
@@ -692,7 +848,24 @@ function populate_courses(r) {
         DATA.courses = new Map();
         recursive_clear(DISPLAY.course_tbody);
         for(const c of j) {
-            add_course_to_display(c);
+            DATA.courses.set(c.sym, c);
+
+            // Create and populate <TR> element to hold course metadata.
+            let tr = document.createElement("tr");
+            tr.setAttribute("data-sym", c.sym);
+            DISPLAY.course_tbody.appendChild(tr);
+            populate_course_table_row(c);
+
+            // Create and populate <TR> (and nested single <TD>)
+            // to hold chapter table.
+            tr = document.createElement("tr");
+            tr.setAttribute("data-chapters", c.sym);
+            const td = document.createElement("td");
+            td.setAttribute("colspan", "6");
+            tr.appendChild(td);
+            DISPLAY.course_tbody.appendChild(tr);
+            populate_course_chapters(c);
+
         }
     }).catch(RQ.add_err);
 }

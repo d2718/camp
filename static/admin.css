@@ -50,15 +50,24 @@ input.tab-button:checked ~ div.tab-content { display: block; }
 table { border-collapse: collapse; }
 
 table.user-table { margin: 1em 0; }
-table.user-table th {
-    text-align: center;
-}
+table.user-table th { text-align: center; }
 table.user-table th,
 table.user-table td { padding: 0.5ex 1ex;; }
 table.user-table td { font-family: monospace; }
 table.user-table tr:nth-child(even) > td {
     background-color: #cdd;
 }
+
+/* In course table, right-align course symbols. */
+table#course-table tr > td:nth-child(1) { text-align: right; }
+/* In course table, center align #chpt and actions buttons. */
+table#course-table tr > td:nth-child(5),
+table#course-table tr > td:nth-child(6) { text-align: center; }
+
+table.user-table tr[data-chapters] { display: none; }
+/* In chapters tables, center align weights and actions buttons. */
+table.chapter-table tr > td:nth-child(4),
+table.chapter-table tr > td:nth-child(5) { text-align: center; }
 
 button {
     padding: 0.5ex;
@@ -67,7 +76,13 @@ button {
 
 dialog.edit {
     position: fixed;
-    top: 1em; right: 1em;
+    top: 1em;
+    /*  If These next two property values seem like going around your ass to
+        get to your elbow, it's because "right: 1em;" didn't work. */
+    left: calc(100vw - 1em);
+    transform: translate(-100%, 0);
+
+    min-width: 50ex;
     background-color: #eee;
     border: 1ex solid #888;
     border-radius: 1ex;
@@ -86,9 +101,12 @@ dialog > form {
 }
 dialog > form > *:nth-child(odd) { justify-self: end; }
 dialog > form >*:nth-child(even) { justify-self: start; }
+dialog > form label { white-space: pre; }
 
+input { font-family: monospace; }
 input:invalid { background-color: #fcc; }
 input:valid { background-color: #cfc; }
+input[type="email"] { min-width: 36ex; }
 
 dialog#are-you-sure {
     position: fixed;
