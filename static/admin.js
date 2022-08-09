@@ -35,6 +35,7 @@ const DISPLAY = {
     student_upload: document.getElementById("upload-students-dialog"),
     student_paste: document.getElementById("paste-students-dialog"),
     course_tbody:  document.querySelector("table#course-table > tbody"),
+    course_upload: document.getElementById("upload-course-dialog"),
 };
 
 function populate_users(r) {
@@ -81,7 +82,8 @@ function field_response(r) {
 
     } else if(action == "populate-users") {
         populate_users(r);
-
+    } else if(action == "populate-courses") {
+        populate_courses(r);
     } else {
         const e_n = STATE.next_error();
         const err_txt = `Unrecognized x-camp-action header: ${action}. (See console error #${e_n})`;
@@ -199,19 +201,6 @@ function add_user_to_display(u) {
         console.log("add_user_to_display() not implemented for", u);
     }
 }
-
-/*
-
-PAGE LOAD SECTION
-
-*/
-
-console.log(DISPLAY);
-
-ensure_on_load(() => {
-    request_action("populate-users", "", "Fetching User data...");
-});
-
 
 /*
 
@@ -676,3 +665,52 @@ function add_course_to_display(c) {
 
     DISPLAY.course_tbody.appendChild(tr);
 }
+
+function populate_courses(r) {
+    r.json()
+    .then(j => {
+        console.log("populate-courses response:", j);
+
+        DATA.courses = new Map();
+        recursive_clear(DISPLAY.course_tbody);
+        for(const c of j) {
+            add_course_to_display(c);
+        }
+    }).catch(RQ.add_err);
+}
+
+document.getElementById("upload-course")
+    .addEventListener("click", () => {
+        DISPLAY.course_upload.showModal();
+    });
+
+function upload_course_submit(evt) {
+    const form = document.forms["upload-course"];
+    const data = new FormData(form);
+    const file = data.get("file");
+
+    get_file_as_text(file)
+    .then((text) => {
+        DISPLAY.course_upload.close();
+        request_action("upload-course", text, `Uploading new students...`);
+    })
+    .catch((err) => {
+        RQ.add_err(`Error opening local file: ${err}`);
+    });
+}
+
+document.getElementById("upload-course-confirm")
+    .addEventListener("click", upload_course_submit);
+
+/*
+
+PAGE LOAD SECTION
+
+*/
+
+console.log(DISPLAY);
+
+ensure_on_load(() => {
+    request_action("populate-users", "", "Fetching User data...");
+    request_action("populate-courses", "", "Fetching Course data...");
+});

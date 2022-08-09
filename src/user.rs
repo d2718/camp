@@ -1,11 +1,12 @@
 /*!
 Database users.
 */
+use std::cmp::Ordering;
 use std::io::Read;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Role {
     Admin,
     Boss,
@@ -42,7 +43,7 @@ impl std::str::FromStr for Role {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct BaseUser {
     pub uname: String,
     pub role: Role,
@@ -91,13 +92,13 @@ impl BaseUser {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Teacher {
     pub base: BaseUser,
     pub name: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Student {
     pub base:BaseUser,
     /// Last name of the student.
@@ -233,7 +234,36 @@ impl Student {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+impl PartialOrd for User {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let x = match self {
+            User::Admin(ref a) => match other {
+                User::Admin(ref oa) => a.uname.cmp(&oa.uname),
+                _ => Ordering::Less,
+            },
+            User::Boss(ref b) => match other {
+                User::Admin(_) => Ordering::Greater,
+                User::Boss(ref ob) => b.uname.cmp(&ob.uname),
+                _ => Ordering::Less,
+            },
+            User::Teacher(ref t) => match other {
+                User::Teacher(ref ot) => t.base.uname.cmp(&ot.base.uname),
+                User::Student(_) => Ordering::Less,
+                _ => Ordering::Greater,
+            },
+            User::Student(ref s) => match other {
+                User::Student(ref os) => match s.last.cmp(&os.last) {
+                    Ordering::Equal => s.rest.cmp(&os.rest),
+                    x => x,
+                },
+                _ => Ordering::Greater,
+            }
+        };
+        Some(x)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum User {
     Admin(BaseUser),
     Boss(BaseUser),
@@ -278,6 +308,7 @@ impl User {
         }
     }
 }
+
 
 #[cfg(test)]
 mod tests {

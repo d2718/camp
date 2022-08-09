@@ -1,6 +1,7 @@
 /*!
 Subcrate for interoperation with Admin users.
 */
+use std::io::Cursor;
 use std::sync::Arc;
 
 use axum::{
@@ -13,6 +14,7 @@ use serde_json::json;
 use tokio::sync::RwLock;
 
 use crate::config::Glob;
+use crate::course::{Course, Chapter};
 use crate::{auth, auth::AuthResult, user::*};
 use super::*;
 
@@ -123,6 +125,8 @@ pub async fn api(
         "update-user" => update_user(body, glob.clone()).await,
         "delete-user" => delete_user(body, glob.clone()).await,
         "upload-students" => upload_students(body, glob.clone()).await,
+        "populate-courses" => populate_courses(glob.clone()).await,
+        "upload-course" => upload_course(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognizable x-camp-action value.", x)
         ),
@@ -152,9 +156,10 @@ async fn populate_users(glob: Arc<RwLock<Glob>>) -> Response {
     log::trace!("populate_all( Glob ) called.");
 
     let glob = glob.read().await;
-    let users: Vec<&User> = glob.users.iter()
+    let mut users: Vec<&User> = glob.users.iter()
         .map(|(_, u)| u)
         .collect();
+    users.sort_by(|a, b| a.partial_cmp(b).unwrap());
     
     (
         StatusCode::OK,
@@ -303,4 +308,74 @@ async fn delete_user(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response 
     }
 
     populate_users(glob).await
+}
+
+//
+//
+// This section is for dealing with COURSES.
+//
+//
+
+async fn populate_courses(glob: Arc<RwLock<Glob>>) -> Response {
+    let glob = glob.read().await;
+
+    let mut courses: Vec<&Course> = glob.courses.iter()
+        .map(|(_, c)| c)
+        .collect();
+    
+    courses.sort_by(|a, b|
+        a.level.partial_cmp(&b.level).unwrap_or(std::cmp::Ordering::Equal)
+    );
+
+    (
+        StatusCode::OK,
+        [(
+            HeaderName::from_static("x-camp-action"),
+            HeaderValue::from_static("populate-courses")
+        )],
+        Json(courses)
+    ).into_response()
+}
+
+async fn upload_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires textual body.".to_owned()
+        ); },
+    };
+
+    let reader = Cursor::new(body);
+    let crs = match Course::from_reader(reader) {
+        Ok(crs) => crs,
+        Err(e) => { return respond_bad_request(e); },
+    };
+
+    {
+        let glob = glob.read().await;
+        let data = glob.data();
+        match data.read().await.insert_courses(&vec![crs]).await {
+            Ok((n_crs, n_ch)) => {
+                log::trace!(
+                    "Inserted {} Cours(es) and {} Chapter(s) into the Data DB.",
+                    n_crs, n_ch
+                );
+            },
+            Err(e) => {
+                return text_500(Some(e.into()));
+            },
+        };
+    }
+
+    {
+        let mut glob = glob.write().await;
+        if let Err(e) = glob.refresh_courses().await {
+            log::error!(
+                "Error refreshing course hash from database: {}", &e
+            );
+            return text_500(Some("Unable to reread courses from database.".to_owned()));
+        }
+    }
+
+    populate_courses(glob).await
 }

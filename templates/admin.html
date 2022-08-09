@@ -99,13 +99,17 @@ const AUTH = {
     <div id="course-tab-content" class="tab-content">
         <h2>Courses</h2>
         <div id="courses">
-            <table id="course-table">
+            <table id="course-table" class="user-table">
                 <thead><tr>
-                    <th>sym</th><th>course title</th><th>level</th>
-                    <th>textbook title</th><th># chapters</th><th>actions</th>
+                    <th>sym</th><th>course</th><th>level</th>
+                    <th>textbook</th><th>#chpt</th><th>actions</th>
                 </tr></thead>
                 <tbody></tbody>
             </table>
+
+            <div>
+                <button id="upload-course"><label>upload Course file</label></button>
+            </div>
         </div>
     </div>
 </li>
@@ -256,6 +260,20 @@ const AUTH = {
                     <label class="cancel">cancel</label>
                 </button>
                 <button id="paste-students-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+            </form>
+        </dialog>
+
+        <dialog id="upload-course-dialog" class="edit">
+            <h1>Upload Course File</h1>
+            <form name="upload-course" method="dialog">
+                <label for="upload-course-file">file</label>
+                <input type="file" name="file" id="upload-course-file" required>
+                <button id="upload-course-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="upload-course-confirm">
                     <label class="confirm">confirm</label>
                 </button>
             </form>
