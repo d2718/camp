@@ -12,6 +12,7 @@ use tokio_postgres::{Client, NoTls, Row, Statement, types::Type};
 use rand::{Rng, distributions};
 
 use crate::course::{Course, Chapter, Custom};
+mod cal;
 mod courses;
 mod users;
 
@@ -94,6 +95,12 @@ static SCHEMA: &[(&str, &str, &str)] = &[
             spring_notices SMALLINT
         )",
         "DROP TABLE students",
+    ),
+
+    (
+        "SELECT FROM information_schema.tables WHERE table_name = 'calendar'",
+        "CREATE TABLE calendar ( day DATE UNIQUE NOT NULL )",
+        "DROP TABLE calendar",
     ),
 ];
 

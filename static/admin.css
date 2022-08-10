@@ -57,6 +57,10 @@ table.user-table td { font-family: monospace; }
 table.user-table tr:nth-child(even) > td {
     background-color: #cdd;
 }
+table.user-table button,
+table.course-table button { margin-right: 1ex; }
+table.user-table button:last-child,
+table.course-table button:last-child { margin-right: 0; }
 
 /* In course table, right-align course symbols. */
 table#course-table tr > td:nth-child(1) { text-align: right; }
@@ -77,8 +81,10 @@ div.chapter-append > form > * { margin-left: 1em; }
 div.chapter-append input { width: 10ex; }
 
 button {
-    padding: 0.5ex;
+    padding: 0.3ex;
     min-width: 2em;
+    border: 1px solid #234;
+    border-radius: 0.5ex;
 }
 
 dialog.edit {
@@ -92,7 +98,6 @@ dialog.edit {
     min-width: 50ex;
     background-color: #eee;
     border: 1ex solid #888;
-    border-radius: 1ex;
     padding: 1em;
 }
 dialog > h1 {

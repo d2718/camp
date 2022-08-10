@@ -267,7 +267,7 @@ impl Store {
 
         client.execute(
             "UPDATE chapters SET
-                seq = $1, title = $2, subject = $3, weight = $4
+                sequence = $1, title = $2, subject = $3, weight = $4
                 WHERE id = $5",
             &[&ch.seq, &ch.title, &ch.subject, &ch.weight, &ch.id]
         ).await?;
@@ -334,7 +334,11 @@ impl Store {
             course_map.insert(crs.id, crs);
         }
 
-        let chapter_rows = t.query("SELECT * from chapters", &[]).await?;
+        let chapter_rows = t.query(
+            "SELECT * from chapters
+                ORDER BY sequence", 
+            &[]
+        ).await?;
         for row in chapter_rows.iter() {
             let ch = chapter_from_row(row)?;
             vec_map.get_mut(&ch.course_id).unwrap().push(ch);

@@ -84,6 +84,15 @@ CREATE TABLE custom_chapters (
 
 ```
 
+## Calendar
+
+```sql
+
+CREATE TABLE calendar (
+    day DATE
+);
+```
+
 ## Goals
 
 ```sql

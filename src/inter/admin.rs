@@ -129,7 +129,9 @@ pub async fn api(
         "upload-course" => upload_course(body, glob.clone()).await,
         "add-course" => add_course(body, glob.clone()).await,
         "delete-course" => delete_course(body, glob.clone()).await,
+        "update-course" => update_course(body, glob.clone()).await,
         "add-chapters" => add_chapters(body, glob.clone()).await,
+        "update-chapter" => update_chapter(body, glob.clone()).await,
         "delete-chapter" => delete_chapter(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognizable x-camp-action value.", x)

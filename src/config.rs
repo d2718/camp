@@ -393,6 +393,10 @@ impl<'a> Glob {
 
         return stud_refs;
     }
+
+/*     pub async fn delete_course(sym: &str) -> Result<(), UnifiedError> {
+        
+    } */
 }
 
 async fn insert_default_admin_into_data_db(
