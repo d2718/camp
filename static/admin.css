@@ -69,6 +69,13 @@ table.user-table tr[data-chapters] { display: none; }
 table.chapter-table tr > td:nth-child(4),
 table.chapter-table tr > td:nth-child(5) { text-align: center; }
 
+div.chapter-append {
+    display: flex;
+    justify-content: space-between;
+}
+div.chapter-append > form > * { margin-left: 1em; }
+div.chapter-append input { width: 10ex; }
+
 button {
     padding: 0.5ex;
     min-width: 2em;

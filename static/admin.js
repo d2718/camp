@@ -39,6 +39,7 @@ const DISPLAY = {
     course_tbody:  document.querySelector("table#course-table > tbody"),
     course_edit:   document.getElementById("alter-course"),
     course_upload: document.getElementById("upload-course-dialog"),
+    chapter_edit:  document.getElementById("alter-chapter"),
 };
 
 function populate_users(r) {
@@ -755,6 +756,122 @@ async function delete_course_submit(evt) {
 document.getElementById("delete-course")
     .addEventListener("click", delete_course_submit);
 
+function append_chapter(evt) {
+    const sym = this.getAttribute("data-sym");
+    const c = DATA.courses.get(sym);
+    
+    let new_ch_n = 1;
+    if(c.chapters.at(-1)) {
+        new_ch_n = c.chapters.at(-1).seq + 1;
+    }
+
+    const new_ch = {
+        // Will be set appropriately on insertion into database.
+        "id": 0,
+        "course_id": c.id,
+        "seq": new_ch_n,
+        "title": `Chapter ${new_ch_n}`,
+        "subject": null,
+        "weight": 1.0,
+    };
+
+    const chapters = [new_ch];
+
+    request_action("add-chapters", chapters, `Adding Chapter ${new_ch_n} to ${sym} (${c.title}).`);
+}
+
+function append_n_chapters(evt) {
+    evt.preventDefault();
+
+    const sym = this.getAttribute("data-sym");
+    const c = DATA.courses.get(sym);
+    const form_name = this.getAttribute("data-form-name");
+    const form = document.forms[form_name];
+    const data = new FormData(form);
+    const n_chs = Number(data.get("number"));
+
+    let first_ch_n = 1;
+    if(c.chapters.at(-1)) {
+        first_ch_n = c.chapters.at(-1).seq + 1;
+    }
+
+    const chapters = new Array();
+
+    for(let n = 0; n < n_chs; n++) {
+        const ch_n = n + first_ch_n;
+
+        const new_ch = {
+            // Will be set appropriately upon insertion into database.
+            "id": 0,
+            "course_id": c.id,
+            "seq": ch_n,
+            "title": `Chapter ${ch_n}`,
+            "subject": null,
+            "weight": 1.0,
+        };
+
+        chapters.push(new_ch);
+    }
+
+    request_action("add-chapters", chapters, `Adding ${chapters.length} Chapters to ${sym} (${c.title})`);
+}
+
+function edit_chapter(evt) {
+    const sym = this.getAttribute("data-sym");
+    const idx = Number(this.getAttribute("data-index"));
+    const ch = DATA.courses.get(sym).chapters[idx];
+    const form = document.forms["alter-chapter"];
+    const del = document.getElementById("delete-chapter");
+    del.setAttribute("data-id", ch.id);
+    del.setAttribute("data-description", `${ch.title}`);
+
+    form.elements["id"].value = ch.id;
+    form.elements["seq"].value = ch.seq;
+    form.elements["title"].value = ch.title;
+    form.elements["subject"].value = ch.subject;
+    form.elements["weight"].value = ch.weight;
+
+    DISPLAY.chapter_edit.showModal();
+}
+
+function edit_chapter_submit(evt) {
+    const form = document.forms["alter-chapter"];
+    const data = new FormData(form);
+
+    const ch = {
+        "id": data.get("id"),
+        // The server won't change this, so it doesn't matter.
+        "course_id": 0,
+        "seq": data.get("seq"),
+        "title": data.get("title").trim(),
+        "subject": data.get("subject").trim(),
+        "weight": (data.get("weight") || 1.0)
+    };
+
+    DISPLAY.chapter_edit.close();
+    request_action("alter-chapter", ch, `Updating chapter details.`);
+}
+document.getElementById("alter-chapter-cancel")
+    .addEventListener("click", (evt) => {
+        evt.preventDefault();
+        DISPLAY.chapter_edit.close();
+    });
+document.getElementById("alter-chapter-confirm")
+    .addEventListener("click", edit_chapter_submit);
+
+async function delete_chapter_submit(evt) {
+    const id = this.getAttribute("data-id");
+    const desc = this.getAttribute("data-description");
+    const q = `Are you sure you want to delete ${desc} from this Course?`;
+    if(await are_you_sure(q)) {
+        DISPLAY.chapter_edit.close();
+        request_action("delete-chapter", id, `Deleting Chapter "${desc}.`);
+    }
+}
+
+document.getElementById("delete-chapter")
+    .addEventListener("click", delete_chapter_submit);
+
 function toggle_chapter_display(evt) {
     const sym = this.getAttribute("data-sym");
     let tr = document.querySelector(`tr[data-chapters="${sym}"]`);
@@ -789,7 +906,7 @@ function populate_course_chapters(c) {
     tab.appendChild(thead);
 
     const tbody = document.createElement("tbody");
-    for(const ch of c.chapters) {
+    c.chapters.forEach((ch, n) => {
         const tr = document.createElement("tr");
         tr.setAttribute("data-id", ch.id);
         tr.appendChild(text_td(ch.seq));
@@ -797,23 +914,50 @@ function populate_course_chapters(c) {
         tr.appendChild(text_td(ch.subject || ""));
         tr.appendChild(text_td(ch.weight));
         const td = document.createElement("td");
-        //
-        // Insert edit action buttons here.
-        //
+        const ebutt = document.createElement("button");
+        label("edit", ebutt);
+        ebutt.setAttribute("data-sym", sym);
+        ebutt.setAttribute("data-index", n);
+        ebutt.addEventListener("click", edit_chapter);
+        td.appendChild(ebutt);
         tr.appendChild(td);
         tbody.appendChild(tr);
-    }
+    });
     tab.appendChild(tbody);
 
     td_container.appendChild(tab);
 
     const div = document.createElement("div");
+    div.setAttribute("class", "chapter-append");
+
     const add_butt = document.createElement("button");
+    add_butt.setAttribute("data-sym", sym);
     label("+ append chapter", add_butt);
-    //
-    // TODO: Add event handler.
-    //
+    add_butt.addEventListener("click", append_chapter)
     div.appendChild(add_butt);
+
+    const form_name = `append-${sym}`;
+    const form = document.createElement("form");
+    form.setAttribute("name", form_name);
+    form.setAttribute("class", "append-form");
+
+    const n_ch_ipt = document.createElement("input");
+    n_ch_ipt.setAttribute("type", "number");
+    n_ch_ipt.setAttribute("name", "number");
+    n_ch_ipt.setAttribute("min", "1");
+    n_ch_ipt.setAttribute("max", "64");
+    n_ch_ipt.required = true;
+    form.appendChild(n_ch_ipt);
+
+    const app_butt = document.createElement("button");
+    app_butt.setAttribute("data-form-name", form_name);
+    app_butt.setAttribute("data-sym", sym);
+    label("+ append N Chapters", app_butt);
+    app_butt.addEventListener("click", append_n_chapters);
+    form.appendChild(app_butt);
+
+    div.appendChild(form);
+
     td_container.appendChild(div);
 }
 

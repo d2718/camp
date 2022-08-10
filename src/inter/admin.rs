@@ -129,6 +129,8 @@ pub async fn api(
         "upload-course" => upload_course(body, glob.clone()).await,
         "add-course" => add_course(body, glob.clone()).await,
         "delete-course" => delete_course(body, glob.clone()).await,
+        "add-chapters" => add_chapters(body, glob.clone()).await,
+        "delete-chapter" => delete_chapter(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognizable x-camp-action value.", x)
         ),
@@ -447,6 +449,38 @@ async fn delete_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respons
             Err(e) => {
                 return text_500(Some(e.into()));
             },
+        };
+    }
+
+    refresh_and_repopulate_courses(glob).await
+}
+
+async fn add_chapters(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires application/json body with new Chapter info.".to_owned()
+        ); },
+    };
+
+    let chapters: Vec<Chapter> = match serde_json::from_str(&body) {
+        Ok(ch) => ch,
+        Err(e) => {
+            log::error!(
+                "Error deserializing JSON {:?} as Chapter: {}",
+                &body, &e
+            );
+            return text_500(Some("Unable to deserialize to vector of Chapters.".to_owned()));
+        }
+    };
+
+    {
+        let glob = glob.read().await;
+        let data = glob.data();
+        if let Err(e) = data.read().await.insert_chapters(&chapters).await {
+            return text_500(Some(format!(
+                "Unable to insert Chapter: {}", &e
+            )));
         };
     }
 
