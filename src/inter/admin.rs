@@ -428,6 +428,36 @@ async fn add_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
     refresh_and_repopulate_courses(glob).await
 }
 
+async fn update_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires applicaiton/json body with Course details.".to_owned()
+        ); },
+    };
+
+    let crs: Course = match serde_json::from_str(&body) {
+        Ok(crs) => crs,
+        Err(e) => {
+            log::error!(
+                "Error deserializing JSON {:?} as Course: {}",
+                &body, &e
+            );
+            return text_500(Some("Unable to deserialize to Course struct.".to_owned()));
+        },
+    };
+
+    {
+        let glob = glob.read().await;
+        let data = glob.data();
+        if let Err(e) = data.read().await.update_course(&crs).await {
+            return text_500(Some(format!("Unable to update Course: {}", &e)));
+        };
+    }
+
+    refresh_and_repopulate_courses(glob).await
+}
+
 async fn delete_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
     let body = match body {
         Some(body) => body,
@@ -511,6 +541,38 @@ async fn delete_chapter(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respon
         if let Err(e) = data.read().await.delete_chapter(ch_id).await {
             return text_500(Some(format!(
                 "Unable to delete Chapter: {}", &e
+            )));
+        };
+    }
+
+    refresh_and_repopulate_courses(glob).await
+}
+
+async fn update_chapter(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires application/json body with Chapter details.".to_owned()
+        ); },
+    };
+
+    let ch: Chapter = match serde_json::from_str(&body) {
+        Ok(ch) => ch,
+        Err(e) => {
+            log::error!(
+                "Error deserializing JSON {:?} as Chapter: {}",
+                &body, &e
+            );
+            return text_500(Some("Unable to deserialize to Chapter struct.".to_owned()));
+        }
+    };
+
+    {
+        let glob = glob.read().await;
+        let data = glob.data();
+        if let Err(e) = data.read().await.update_chapter(&ch).await {
+            return text_500(Some(format!(
+                "Unable to update Chapter: {}", &e
             )));
         };
     }

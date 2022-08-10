@@ -147,6 +147,24 @@ impl Store {
         Ok((n_courses, n_chapters as usize))
     }
 
+    pub async fn update_course(
+        &self,
+        c: &Course
+    ) -> Result<(), DbError> {
+        log::trace!("Store::update_course( {:?} ) called.", c);
+
+        let client = self.connect().await?;
+
+        client.execute(
+            "UPDATE courses SET
+                book = $1, title = $2, level = $3
+                WHERE sym = $4",
+            &[&c.book, &c.title, &c.level, &c.sym]
+        ).await?;
+
+        Ok(())
+    }
+
     pub async fn insert_chapters(
         &self,
         chapters: &[Chapter]
@@ -237,6 +255,24 @@ impl Store {
             n_courses, n_chapters
         );
         Ok((n_courses as usize, n_chapters as usize))
+    }
+
+    pub async fn update_chapter(
+        &self,
+        ch: &Chapter
+    ) -> Result<(), DbError> {
+        log::trace!("Store::update_chapter( {:?} ) called.", ch);
+
+        let client = self.connect().await?;
+
+        client.execute(
+            "UPDATE chapters SET
+                seq = $1, title = $2, subject = $3, weight = $4
+                WHERE id = $5",
+            &[&ch.seq, &ch.title, &ch.subject, &ch.weight, &ch.id]
+        ).await?;
+
+        Ok(())
     }
 
     pub async fn get_course_by_sym(
