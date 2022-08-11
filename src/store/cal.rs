@@ -38,7 +38,7 @@ impl Store {
             &[Type::DATE]
         ).await?;
 
-        let n_deleted = t.execute("DELETE FROM calendar").await
+        let n_deleted = t.execute("DELETE FROM calendar", &[]).await
             .map_err(|e| format!("Unable to clear old calendar: {}", &e))?;
 
         let mut n_inserted: u64 = 0;
@@ -78,15 +78,15 @@ impl Store {
         log::trace!("Store::get_dates() called.");
 
         let client = self.connect().await?;
-        let rows = match client.query(
+        let rows = client.query(
             "SELECT day FROM calendar ORDER BY day", &[]
         ).await.map_err(|e| format!(
             "Error fetching calendar from Data DB: {}", &e
         ))?;
 
-        let dates: Vec<Date> = Vec:with_capacity(rows.len());
+        let mut dates: Vec<Date> = Vec::with_capacity(rows.len());
         for row in rows.iter() {
-            let d = row.get("day")?;
+            let d: Date = row.try_get("day")?;
             dates.push(d);
         }
 
@@ -119,6 +119,7 @@ impl Store {
     }
 
     pub async fn set_date(
+        &self,
         date_name: &str,
         day: Date
     ) -> Result<(), DbError> {

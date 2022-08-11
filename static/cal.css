@@ -1,0 +1,34 @@
+table.calendar-month {
+    display: inline-block;
+    user-select: none;
+}
+
+table.calendar-month th {
+    text-align: center;
+}
+
+table.calendar-month td {
+    text-align: right;
+    font-family: monospace;
+    cursor: pointer;
+    padding: 0.4ex;
+    border: 2px solid #ddd;
+}
+
+table.calendar-month td.y {
+    background-color: #344;
+    color: #bdd;
+}
+
+div#calendar-display {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: 1em;
+}
+
+div#calendar-control {
+    margin: 1em 0;
+    display: flex;
+    gap: 1em;
+}

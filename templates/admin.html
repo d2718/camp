@@ -5,6 +5,7 @@
         <title>CAMP | Admin View</title>
         <link rel="stylesheet" href="/static/admin.css">
         <link rel="stylesheet" href="/static/api_request.css">
+        <link rel="stylesheet" href="/static/cal.css">
         <link rel="icon" type="image/png" href="/static/camp_icon.png">
         <script>
 const AUTH = {
@@ -13,6 +14,7 @@ const AUTH = {
 };
         </script>
         <script src="/static/admin.js" defer></script>
+        <script src="/static/cal.js" defer></script>
     </head>
     <body>
         <ul class="tabs">
@@ -111,6 +113,39 @@ const AUTH = {
                 <button id="add-course"><label>add new Course</label></button>
                 <button id="upload-course"><label>upload Course file</label></button>
             </div>
+        </div>
+    </div>
+</li>
+
+<li>
+    <input type="radio" name="tabs" id="cal-tab-radio"
+           class="tab-button">
+    <label for="cal-tab-radio" tabindex="3">Calendar</label>
+
+    <div id="cal-tab-content" class="tab-content">
+        <h2>Calendar</h2>
+        <table id="cal-dates">
+            <tr>
+                <td>end of Fall</td>
+                <td><input type="date" id="cal-end-of-fall"></td>
+            </tr>
+            <tr>
+                <td>end of Spring</td>
+                <td><input type="date" id="cal-end-of-spring"></td>
+            </tr>
+        </table>
+        <div id="calendar-control">
+            <button id="cal-prev-year">
+                <label>&lsaquo;&#x2039;</label>
+            </button>
+            <input type="number" id="cal-year" min="2022">
+            <button id="cal-next-year">
+                <label>&#x203A;&rsaquo;</label>
+            </button>
+        </div>
+
+        <div id="calendar-display">
+
         </div>
     </div>
 </li>
