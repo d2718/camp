@@ -8,6 +8,13 @@ CREATE TABLE calendar (
     day DATE UNIQUE NOT NULL
 );
 ```
+
+```sql
+CREATE TABLE dates (
+    name TEXT PRIMARY KEY,
+    day DATE NOT NULL
+);
+```
 */
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio_postgres::types::{ToSql, Type};
@@ -16,10 +23,10 @@ use time::Date;
 use super::{Store, DbError};
 
 impl Store {
-    pub async fn insert_dates(
+    pub async fn set_calendar(
         &self,
         dates: &[Date]
-    ) -> Result<usize, DbError> {
+    ) -> Result<(usize, usize), DbError> {
         log::trace!("Store::insert_dates( {:?} ) called.", &dates);
 
         let mut client = self.connect().await?;
@@ -31,20 +38,8 @@ impl Store {
             &[Type::DATE]
         ).await?;
 
-        let n_dates = dates.len();
-        match n_dates {
-            0 => { return Ok(0); },
-            1 => {
-                let n_rows = t.execute(
-                    &insert_statement,
-                    &[&dates[0]]
-                ).await?;
-
-                t.commit().await?;
-                return Ok(n_rows as usize);
-            },
-            _ => { /* We go on to the complicated case. */ }
-        }
+        let n_deleted = t.execute("DELETE FROM calendar").await
+            .map_err(|e| format!("Unable to clear old calendar: {}", &e))?;
 
         let mut n_inserted: u64 = 0;
         {
@@ -76,36 +71,67 @@ impl Store {
         }
 
         t.commit().await?;
-        Ok(n_inserted as usize)
+        Ok((n_deleted as usize, n_inserted as usize))
     }
 
-    pub async fn delete_dates(
-        &self,
-        dates: &[Date]
-    ) -> Result<usize, DbError> {
-        log::trace!("Store::delete_dates( {:?} ) called.", &dates);
+    pub async fn get_calendar(&self) -> Result<Vec<Date>, DbError> {
+        log::trace!("Store::get_dates() called.");
 
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
+        let client = self.connect().await?;
+        let rows = match client.query(
+            "SELECT day FROM calendar ORDER BY day", &[]
+        ).await.map_err(|e| format!(
+            "Error fetching calendar from Data DB: {}", &e
+        ))?;
 
-        let delete_statement = t.prepare_typed(
-            "DELETE FROM calendar WHERE date = ANY($1)",
-            &[Type::DATE_ARRAY]
-        ).await?;
+        let dates: Vec<Date> = Vec:with_capacity(rows.len());
+        for row in rows.iter() {
+            let d = row.get("day")?;
+            dates.push(d);
+        }
 
-        let n_removed = match t.execute(
-            &delete_statement,
-            &[&dates]
-        ).await {
-            Ok(n) => n,
-            Err(e) => {
-                return Err(DbError(format!(
-                    "Error removing dates from the calendar: {}", &e
-                )));
-            },
-        };
+        Ok(dates)
+    }
 
-        t.commit().await?;
-        Ok(n_removed as usize)
+    pub async fn add_one_day(&self, day: Date) -> Result<(), DbError> {
+        log::trace!("Store::set_one_day( {} ) called.", &day);
+
+        let client = self.connect().await?;
+        client.execute(
+            "INSERT INTO calendar (day) VALUES ($1)
+                ON CONFLICT DO UPDATE",
+            &[&day]
+        ).await.map_err(|e| format!("Unable to add {} to calendar: {}", &day, &e))?;
+
+        Ok(())
+    }
+
+    pub async fn delete_one_day(&self, day: Date) -> Result<(), DbError> {
+        log::trace!("Store::clear_one_day( {} ) called.", &day);
+
+        let client = self.connect().await?;
+        client.execute(
+            "DELETE FROM calendar WHERE day = $1",
+            &[&day]
+        ).await.map_err(|e| format!("Unable to delete {} from calendar: {}", &day, &e))?;
+
+        Ok(())
+    }
+
+    pub async fn set_date(
+        date_name: &str,
+        day: Date
+    ) -> Result<(), DbError> {
+        log::trace!("Store::set_date( {:?}, {} ) called.", date_name, &day);
+
+        let client = self.connect().await?;
+        client.execute(
+            "INSERT INTO dates (name, day) VALUES ($1, $2)
+                ON CONFLICT TO UPDATE",
+            &[&date_name, &day]
+        ).await.map_err(|e|
+            format!("Unable to set {:?} date {}: {}", date_name, &day, &e))?;
+        
+        Ok(())
     }
 }
