@@ -33,8 +33,7 @@ impl Store {
         let t = client.transaction().await?;
 
         let insert_statement = t.prepare_typed(
-            "INSERT INTO calendar (day) VALUES ($1)
-                ON CONFLICT DO UPDATE",
+            "INSERT INTO calendar (day) VALUES ($1)",
             &[Type::DATE]
         ).await?;
 
@@ -141,12 +140,19 @@ impl Store {
 mod tests {
     use super::*;
 
-    use time::Month;
+    use time::{
+        macros::format_description,
+        Month,
+    };
 
     #[test]
     fn date_format() {
         let d = Date::from_calendar_date(2022, Month::August, 11).unwrap();
 
         println!("Display: \"{}\"", &d);
+
+        let dfmtr = format_description!("[year]-[month]-[day]");
+        let hween = Date::parse("2021-10-31", &dfmtr).unwrap();
+        println!("{:?}, {}", &hween, &hween);
     }
 }

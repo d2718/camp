@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use handlebars::Handlebars;
 use serde::Deserialize;
+use time::Date;
 use tokio::sync::RwLock;
 
 use crate::{
@@ -112,6 +113,7 @@ This guy will haul around some global variables and be passed in an
 pub struct Glob {
     auth: Arc<RwLock<auth::Db>>,
     data: Arc<RwLock<Store>>,
+    pub calendar: Vec<Date>,
     pub courses: HashMap<i64, Course>,
     pub users: HashMap<String, User>,
     pub addr: SocketAddr,
@@ -138,6 +140,15 @@ impl<'a> Glob {
         let new_courses = self.data.read().await.get_courses().await
             .map_err(|e| format!("Error retrieving course information from Data DB: {}", &e))?;
         self.courses = new_courses;
+        Ok(())
+    }
+
+    pub async fn refresh_calendar(&mut self) -> Result<(), String> {
+        log::trace!("Glob::refresh_calendar() called.");
+        let new_dates = self.data.read().await.get_calendar().await
+            .map_err(|e| format!("Error retrieving calendar dates from Data DB: {}", &e))?;
+        self.calendar = new_dates;
+        self.calendar.sort();
         Ok(())
     }
 
@@ -393,10 +404,6 @@ impl<'a> Glob {
 
         return stud_refs;
     }
-
-/*     pub async fn delete_course(sym: &str) -> Result<(), UnifiedError> {
-        
-    } */
 }
 
 async fn insert_default_admin_into_data_db(
@@ -531,6 +538,7 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
     let mut glob = Glob {
         auth: Arc::new(RwLock::new(auth_db)),
         data: Arc::new(RwLock::new(data_db)),
+        calendar: Vec::new(),
         courses: HashMap::new(),
         users: HashMap::new(),
         addr: cfg.addr,
@@ -541,6 +549,9 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
     
     glob.refresh_users().await?;
     log::info!("Retrieved {} users from data DB.", glob.users.len());
+
+    glob.refresh_calendar().await?;
+    log::info!("Retrieved {} dates from data DB.", glob.calendar.len());
 
     inter::init(&cfg.templates_dir)?;
 

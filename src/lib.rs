@@ -3,12 +3,20 @@
 
 use std::fmt::{Display, Write};
 
+use time::{
+    Date,
+    format_description::FormatItem,
+    macros::format_description,
+};
+
 pub mod auth;
 pub mod config;
 pub mod course;
 pub mod inter;
 pub mod store;
 pub mod user;
+
+const DATE_FMT: &[FormatItem] = format_description!("[year]-[month]-[day]");
 
 #[derive(Debug)]
 pub enum UnifiedError {

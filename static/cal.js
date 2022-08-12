@@ -140,6 +140,16 @@ CAL.populate_year = function(target_elt, year) {
     }
 }
 
+CAL.repaint_dates = function() {
+    for(const td of CAL.target_div.querySelectorAll("td[data-date")) {
+        if(CAL.dates.has(td.getAttribute("data-date"))) {
+            td.setAttribute("class","y");
+        } else {
+            td.removeAttribute("class");
+        }
+    }
+}
+
 CAL.set_local = function(r) {
     if(!r.ok) {
         r.text()
@@ -164,20 +174,38 @@ CAL.set_local = function(r) {
         r.json()
         .then(j => {
             CAL.dates = new Set(j);
-            for(const td in CAL.target_div.querySelectorAll("td[data-date]")) {
-                if(CAL.dates.has(td.getAttribute("data-date"))) {
-                    td.setAttribute("class", "y");
-                } else {
-                    td.removeAttribute("class");
-                }
-            }
-        }).catch(RQ.add_err);
+            CAL.repaint_dates();
+        }).catch(e => {
+            console.log(e.line, e);
+            RQ.add_err(e);
+        });
     } else {
         RQ.add_err(`Unrecognized x-camp-action header value: ${action}.`);
     }
 }
 
+CAL.populate_cal = function() {
+    const options = {
+        method: "POST",
+        headers: {
+            "x-camp-action": "populate-cal",
+        },
+        body: ""
+    };
+
+    const r = new Request(
+        API_ENDPOINT,
+        options
+    );
+
+    api_request(r, "Fetching Calendar.", CAL.set_local);
+}
+
 CAL.update_cal = function() {
+    for (const td of CAL.target_div.querySelectorAll('td[class="y"]')) {
+        td.setAttribute("class", "m");
+    }
+
     const options = {
         method: "POST",
         headers: {
@@ -200,15 +228,18 @@ document.getElementById("cal-prev-year")
         const new_year = Number(CAL.year_selector.value) - 1;
         CAL.year_selector.value = new_year;
         CAL.populate_year(CAL.target_div, new_year);
+        CAL.repaint_dates();
     })
 document.getElementById("cal-next-year")
     .addEventListener("click", () => {
         const new_year = Number(CAL.year_selector.value) + 1;
         CAL.year_selector.value = new_year;
         CAL.populate_year(CAL.target_div, new_year);
+        CAL.repaint_dates();
     })
 CAL.year_selector.addEventListener("change", function(evt) {
     CAL.populate_year(CAL.target_div, Number(this.value));
+    CAL.repaint_dates();
 })
 document.getElementById("cal-tab-radio")
     .addEventListener("change", () => {
@@ -216,6 +247,7 @@ document.getElementById("cal-tab-radio")
             const cur_year = CAL.current_academic_year();
             CAL.year_selector.value = cur_year;
             CAL.populate_year(CAL.target_div, cur_year);
+            CAL.populate_cal();
             CAL.has_populated = true;
         }
 });

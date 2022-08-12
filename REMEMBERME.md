@@ -11,3 +11,5 @@ fail to be deleted.
 Slightly more granular "refreshment" and "repopulation" after altering
 `User`s, `Course`s, and `Chapter`s, instead of just rereading and
 resending _everything_.
+
+Generate random passwords on insertion of new users.

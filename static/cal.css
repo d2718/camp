@@ -19,6 +19,10 @@ table.calendar-month td.y {
     background-color: #344;
     color: #bdd;
 }
+table.calendar-month td.m {
+    background-color: #aa4;
+    color: #668;
+}
 
 div#calendar-display {
     display: flex;

@@ -11,11 +11,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde_json::json;
+use time::Date;
 use tokio::sync::RwLock;
 
 use crate::config::Glob;
 use crate::course::{Course, Chapter};
-use crate::{auth, auth::AuthResult, user::*};
+use crate::{auth, auth::AuthResult, DATE_FMT, user::*};
 use super::*;
 
 pub async fn login(
@@ -133,6 +134,8 @@ pub async fn api(
         "add-chapters" => add_chapters(body, glob.clone()).await,
         "update-chapter" => update_chapter(body, glob.clone()).await,
         "delete-chapter" => delete_chapter(body, glob.clone()).await,
+        "populate-cal" => populate_calendar(glob.clone()).await,
+        "update-cal" => update_calendar(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognizable x-camp-action value.", x)
         ),
@@ -359,6 +362,37 @@ async fn refresh_and_repopulate_courses(glob: Arc<RwLock<Glob>>) -> Response {
     populate_courses(glob).await
 }
 
+async fn populate_calendar(glob: Arc<RwLock<Glob>>) -> Response {
+    let date_strs: Vec<String> = glob.read().await.calendar.iter()
+        .map(|d| format!("{}", d))
+        .collect();
+    
+    (
+        StatusCode::OK,
+        [(
+            HeaderName::from_static("x-camp-action"),
+            HeaderValue::from_static("populate-cal")
+        )],
+        Json(date_strs)
+    ).into_response()
+}
+
+async fn refresh_and_repopulate_calendar(glob: Arc<RwLock<Glob>>) -> Response {
+    {
+        let mut glob = glob.write().await;
+        if let Err(e) = glob.refresh_calendar().await {
+            log::error!(
+                "Error refreshing calendar Vec from database: {}", &e
+            );
+            return text_500(Some(format!(
+                "Unable to refresh calendar data from database: {}", &e
+            )));
+        }
+    }
+
+    populate_calendar(glob).await
+}
+
 async fn upload_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
     let body = match body {
         Some(body) => body,
@@ -580,4 +614,54 @@ async fn update_chapter(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respon
     }
 
     refresh_and_repopulate_courses(glob).await
+}
+
+//
+//
+// This section is for dealing with the CALENDAR.
+//
+//
+
+async fn update_calendar(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body: String = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires application/json body with Array of date strings.".to_owned()
+        ); },
+    };
+
+    let date_strs: Vec<&str> = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!(
+                "Error deserializing JSON {:?} as Vector of &str: {}",
+                &body, &e
+            );
+            return text_500(Some("Unable to deserialize to Vector of &str.".to_owned()));
+        }
+    };
+
+    let mut dates: Vec<Date> = Vec::with_capacity(date_strs.len());
+    for s in date_strs.iter() {
+        match Date::parse(s, DATE_FMT) {
+            Ok(d) => { dates.push(d); },
+            Err(e) => {
+                log::error!(
+                    "Error parsing {:?} as Date: {}", s, &e
+                );
+                return text_500(Some(format!("Unable to parse {:?} as Date.", s)));
+            },
+        }
+    }
+
+    {
+        let glob = glob.read().await;
+        let data = glob.data();
+        let reader = data.read().await;
+        if let Err(e) = reader.set_calendar(&dates).await {
+            return text_500(Some(format!("Unable to update calendar: {}", &e)));
+        }
+    }
+
+    refresh_and_repopulate_calendar(glob).await
 }
