@@ -32,3 +32,5 @@ div#calendar-control {
     display: flex;
     gap: 1em;
 }
+
+input#cal-year { max-width: 10ex; }

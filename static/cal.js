@@ -1,12 +1,14 @@
 /*
 Oh, man, we're implementing a calendar.
 */
+
 const CAL = {
     dates: new Set(),
     include_on_drag: true,
     has_populated: false,
     target_div: document.getElementById("calendar-display"),
     year_selector: document.getElementById("cal-year"),
+    date_re: /^[^T]+/,
     month_names: {
         0: "Jan",
         1: "Feb",
@@ -28,8 +30,15 @@ const CAL = {
         } else {
             return today.getFullYear();
         }
-    }
+    },
 };
+CAL.from_iso = function(isostr) {
+    const full = `${isostr}T17:00:00`;
+    return new Date(full);
+}
+CAL.to_iso = function(date) {
+    return date.toISOString().match(CAL.date_re)[0];
+}
 CAL.toggle_on_mousedown = function() {
     const date = this.getAttribute("data-date");
     if(CAL.dates.delete(date)) {
@@ -95,7 +104,7 @@ CAL.make_month = function(year, month) {
             current_tr = document.createElement("tr");
         }
         const td = document.createElement("td");
-        td.setAttribute("data-date", current_day);
+        td.setAttribute("data-date", CAL.to_iso(current_day));
         td.addEventListener("mousedown", CAL.toggle_on_mousedown);
         td.addEventListener("mouseover", CAL.set_on_drag);
         td.appendChild(document.createTextNode(current_day.getDate()));
@@ -131,6 +140,61 @@ CAL.populate_year = function(target_elt, year) {
     }
 }
 
+CAL.set_local = function(r) {
+    if(!r.ok) {
+        r.text()
+        .then(t => {
+            const err_txt = `${t}\n(${r.status}: ${r.statusText})`;
+            RQ.add_err(err_txt);
+        }
+        ).catch(e => {
+            const e_n = STATE.next_error();
+            const err_txt = `Error #${e_n} (see console)`;
+            console.log(e_n, e, r);
+            RQ.add_err(err_txt);
+        });
+        return;
+    }
+
+    let action = r.headers.get("x-camp-action");
+
+    if(!action) {
+        RQ.add_err("Response lacked x-camp-action header.");
+    } else if(action == "populate-cal") {
+        r.json()
+        .then(j => {
+            CAL.dates = new Set(j);
+            for(const td in CAL.target_div.querySelectorAll("td[data-date]")) {
+                if(CAL.dates.has(td.getAttribute("data-date"))) {
+                    td.setAttribute("class", "y");
+                } else {
+                    td.removeAttribute("class");
+                }
+            }
+        }).catch(RQ.add_err);
+    } else {
+        RQ.add_err(`Unrecognized x-camp-action header value: ${action}.`);
+    }
+}
+
+CAL.update_cal = function() {
+    const options = {
+        method: "POST",
+        headers: {
+            "x-camp-action": "update-cal",
+            "content-type": "application/json"
+        },
+        body: JSON.stringify(Array.from(CAL.dates))
+    };
+
+    const r = new Request(
+        API_ENDPOINT,
+        options
+    );
+
+    api_request(r, "Updating Calendar.", CAL.set_local);
+}
+
 document.getElementById("cal-prev-year")
     .addEventListener("click", () => {
         const new_year = Number(CAL.year_selector.value) - 1;
@@ -155,3 +219,5 @@ document.getElementById("cal-tab-radio")
             CAL.has_populated = true;
         }
 });
+document.getElementById("cal-update")
+    .addEventListener("click", CAL.update_cal);

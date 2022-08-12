@@ -136,3 +136,17 @@ impl Store {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use time::Month;
+
+    #[test]
+    fn date_format() {
+        let d = Date::from_calendar_date(2022, Month::August, 11).unwrap();
+
+        println!("Display: \"{}\"", &d);
+    }
+}
