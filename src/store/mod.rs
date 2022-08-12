@@ -102,6 +102,15 @@ static SCHEMA: &[(&str, &str, &str)] = &[
         "CREATE TABLE calendar ( day DATE UNIQUE NOT NULL )",
         "DROP TABLE calendar",
     ),
+
+    (
+        "SELECT FROM information_schema.tables WHERE table_name = 'dates'",
+        "CREATE TABLE dates (
+            name TEXT PRIMARY KEY,
+            day DATE NOT NULL
+        )",
+        "DROP TABLE dates",
+    ),
 ];
 
 #[derive(Debug, PartialEq)]

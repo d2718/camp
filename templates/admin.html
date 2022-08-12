@@ -124,16 +124,20 @@ const AUTH = {
 
     <div id="cal-tab-content" class="tab-content">
         <h2>Calendar</h2>
-        <table id="cal-dates">
-            <tr>
-                <td>end of Fall</td>
-                <td><input type="date" id="cal-end-of-fall"></td>
-            </tr>
-            <tr>
-                <td>end of Spring</td>
-                <td><input type="date" id="cal-end-of-spring"></td>
-            </tr>
-        </table>
+
+        <form name="cal-dates" id="cal-dates-form">
+            <table id="cal-dates">
+                <tr>
+                    <td><label for="cal-end-of-fall">end of Fall</label></td>
+                    <td><input type="date" name="end-fall" id="cal-end-of-fall"></td>
+                </tr>
+                <tr>
+                    <td><label for="cal-end-of-spring">end of Spring</label></td>
+                    <td><input type="date" name="end-spring" id="cal-end-of-spring"></td>
+                </tr>
+            </table>
+        </form>
+
         <div id="calendar-control">
             <button id="cal-prev-year">
                 <label>&lsaquo;&#x2039;</label>

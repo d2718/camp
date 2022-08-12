@@ -1,6 +1,7 @@
 /*!
 Subcrate for interoperation with Admin users.
 */
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -136,6 +137,8 @@ pub async fn api(
         "delete-chapter" => delete_chapter(body, glob.clone()).await,
         "populate-cal" => populate_calendar(glob.clone()).await,
         "update-cal" => update_calendar(body, glob.clone()).await,
+        "populate-dates" => populate_dates(glob).await,
+        "set-date" => set_date(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognizable x-camp-action value.", x)
         ),
@@ -360,37 +363,6 @@ async fn refresh_and_repopulate_courses(glob: Arc<RwLock<Glob>>) -> Response {
     }
 
     populate_courses(glob).await
-}
-
-async fn populate_calendar(glob: Arc<RwLock<Glob>>) -> Response {
-    let date_strs: Vec<String> = glob.read().await.calendar.iter()
-        .map(|d| format!("{}", d))
-        .collect();
-    
-    (
-        StatusCode::OK,
-        [(
-            HeaderName::from_static("x-camp-action"),
-            HeaderValue::from_static("populate-cal")
-        )],
-        Json(date_strs)
-    ).into_response()
-}
-
-async fn refresh_and_repopulate_calendar(glob: Arc<RwLock<Glob>>) -> Response {
-    {
-        let mut glob = glob.write().await;
-        if let Err(e) = glob.refresh_calendar().await {
-            log::error!(
-                "Error refreshing calendar Vec from database: {}", &e
-            );
-            return text_500(Some(format!(
-                "Unable to refresh calendar data from database: {}", &e
-            )));
-        }
-    }
-
-    populate_calendar(glob).await
 }
 
 async fn upload_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
@@ -622,6 +594,37 @@ async fn update_chapter(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respon
 //
 //
 
+async fn populate_calendar(glob: Arc<RwLock<Glob>>) -> Response {
+    let date_strs: Vec<String> = glob.read().await.calendar.iter()
+        .map(|d| format!("{}", d))
+        .collect();
+    
+    (
+        StatusCode::OK,
+        [(
+            HeaderName::from_static("x-camp-action"),
+            HeaderValue::from_static("populate-cal")
+        )],
+        Json(date_strs)
+    ).into_response()
+}
+
+async fn refresh_and_repopulate_calendar(glob: Arc<RwLock<Glob>>) -> Response {
+    {
+        let mut glob = glob.write().await;
+        if let Err(e) = glob.refresh_calendar().await {
+            log::error!(
+                "Error refreshing calendar Vec from database: {}", &e
+            );
+            return text_500(Some(format!(
+                "Unable to refresh calendar data from database: {}", &e
+            )));
+        }
+    }
+
+    populate_calendar(glob).await
+}
+
 async fn update_calendar(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
     let body: String = match body {
         Some(body) => body,
@@ -664,4 +667,78 @@ async fn update_calendar(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respo
     }
 
     refresh_and_repopulate_calendar(glob).await
+}
+
+async fn populate_dates(glob: Arc<RwLock<Glob>>) -> Response {
+    let date_map: HashMap<String, String> = glob.read().await.dates.iter()
+        .map(|(name, date)| (name.clone(), format!("{}", date)))
+        .collect();
+    
+    (
+        StatusCode::OK,
+        [(
+            HeaderName::from_static("x-camp-action"),
+            HeaderValue::from_static("populate-dates")
+        )],
+        Json(date_map)
+    ).into_response()
+}
+
+async fn set_date(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request requires a body with tuple of (name, date) strings.".to_owned()
+        );},
+    };
+
+    let (name, date_str): (&str, &str) = match serde_json::from_str(&body) {
+        Ok((n, d)) => (n, d),
+        Err(_) => { return text_500(Some(
+            "Unable to deserialize name and date data".to_owned()
+        )); },
+    };
+
+    if date_str.trim() == "" {
+        let mut glob = glob.write().await;
+        {
+            let data = glob.data();
+            if let Err(e) = data.read().await.delete_date(name).await {
+                log::error!(
+                    "Error deleting date {:?} from database: {}",
+                    name, &e
+                );
+                return text_500(Some("Error deleting date from database.".to_owned()));
+            }
+
+            if let Err(e) = glob.refresh_dates().await {
+                return text_500(Some("Error retrieving new dates from database.".to_owned()));
+            }
+        }
+    } else {
+
+        let date = match Date::parse(date_str, DATE_FMT) {
+            Ok(d) => d,
+            Err(e) => { return text_500(Some(format!(
+                "Error parsing {:?} as date.", date_str
+            ))); },
+        };
+
+        let mut glob = glob.write().await;
+        {
+            let data = glob.data();
+            if let Err(e) = data.read().await.set_date(name, &date).await {
+                log::error!(
+                    "Error inserting date {:?}: {} into database: {}",
+                    name, &date, &e
+                );
+                return text_500(Some("Error inserting date into database.".to_owned()));
+            };
+        }
+        if let Err(e) = glob.refresh_dates().await {
+            return text_500(Some("Error retrieving new dates from database.".to_owned()));
+        }
+    }
+
+    populate_dates(glob).await
 }

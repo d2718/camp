@@ -114,6 +114,7 @@ pub struct Glob {
     auth: Arc<RwLock<auth::Db>>,
     data: Arc<RwLock<Store>>,
     pub calendar: Vec<Date>,
+    pub dates: HashMap<String, Date>,
     pub courses: HashMap<i64, Course>,
     pub users: HashMap<String, User>,
     pub addr: SocketAddr,
@@ -149,6 +150,14 @@ impl<'a> Glob {
             .map_err(|e| format!("Error retrieving calendar dates from Data DB: {}", &e))?;
         self.calendar = new_dates;
         self.calendar.sort();
+        Ok(())
+    }
+
+    pub async fn refresh_dates(&mut self) -> Result<(), String> {
+        log::trace!("Glob::refresh_dates() called.");
+        let new_dates = self.data.read().await.get_dates().await
+            .map_err(|e| format!("Error retrieving special dates from Data DB: {}", &e))?;
+        self.dates = new_dates;
         Ok(())
     }
 
@@ -538,6 +547,7 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
     let mut glob = Glob {
         auth: Arc::new(RwLock::new(auth_db)),
         data: Arc::new(RwLock::new(data_db)),
+        dates: HashMap::new(),
         calendar: Vec::new(),
         courses: HashMap::new(),
         users: HashMap::new(),

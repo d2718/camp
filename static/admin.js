@@ -839,17 +839,17 @@ function edit_chapter_submit(evt) {
     const data = new FormData(form);
 
     const ch = {
-        "id": Number(data.get("id")),
+        "id": data.get("id"),
         // The server won't change this, so it doesn't matter.
         "course_id": 0,
-        "seq": Number(data.get("seq")),
+        "seq": data.get("seq"),
         "title": data.get("title").trim(),
         "subject": data.get("subject").trim(),
-        "weight": Number(data.get("weight") || 1.0)
+        "weight": (data.get("weight") || 1.0)
     };
 
     DISPLAY.chapter_edit.close();
-    request_action("update-chapter", ch, `Updating chapter details.`);
+    request_action("alter-chapter", ch, `Updating chapter details.`);
 }
 document.getElementById("alter-chapter-cancel")
     .addEventListener("click", (evt) => {

@@ -23,6 +23,9 @@ table.calendar-month td.m {
     background-color: #aa4;
     color: #668;
 }
+table.calendar-month td[data-special] {
+    border-color: red;
+}
 
 div#calendar-display {
     display: flex;

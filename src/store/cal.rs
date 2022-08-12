@@ -16,6 +16,8 @@ CREATE TABLE dates (
 );
 ```
 */
+use std::collections::HashMap;
+
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio_postgres::types::{ToSql, Type};
 use time::Date;
@@ -92,47 +94,75 @@ impl Store {
         Ok(dates)
     }
 
-    pub async fn add_one_day(&self, day: Date) -> Result<(), DbError> {
-        log::trace!("Store::set_one_day( {} ) called.", &day);
-
-        let client = self.connect().await?;
-        client.execute(
-            "INSERT INTO calendar (day) VALUES ($1)
-                ON CONFLICT DO UPDATE",
-            &[&day]
-        ).await.map_err(|e| format!("Unable to add {} to calendar: {}", &day, &e))?;
-
-        Ok(())
-    }
-
-    pub async fn delete_one_day(&self, day: Date) -> Result<(), DbError> {
-        log::trace!("Store::clear_one_day( {} ) called.", &day);
-
-        let client = self.connect().await?;
-        client.execute(
-            "DELETE FROM calendar WHERE day = $1",
-            &[&day]
-        ).await.map_err(|e| format!("Unable to delete {} from calendar: {}", &day, &e))?;
-
-        Ok(())
-    }
-
     pub async fn set_date(
         &self,
-        date_name: &str,
-        day: Date
+        name: &str,
+        day: &Date
     ) -> Result<(), DbError> {
-        log::trace!("Store::set_date( {:?}, {} ) called.", date_name, &day);
+        log::trace!("Store::set_date( {:?}, {} ) called.", name, &day);
 
         let client = self.connect().await?;
         client.execute(
-            "INSERT INTO dates (name, day) VALUES ($1, $2)
-                ON CONFLICT TO UPDATE",
-            &[&date_name, &day]
-        ).await.map_err(|e|
-            format!("Unable to set {:?} date {}: {}", date_name, &day, &e))?;
-        
+            "INSERT INTO dates (name, day)
+                VALUES ($1, $2)
+                ON CONFLICT ON CONSTRAINT dates_pkey
+                DO UPDATE set day = $2",
+            &[&name, &day]
+        ).await.map_err(|e| format!(
+            "Error inserting date {:?} ({}) into database: {}",
+            &name, &day, &e
+        ))?;
+
         Ok(())
+    }
+
+    pub async fn delete_date(&self, name: &str) -> Result<(), DbError> {
+        log::trace!("Store::delete_date( {:?} ) called.", &name);
+
+        let client = self.connect().await?;
+        let n_deleted = client.execute(
+            "DELETE FROM dates WHERE name = $1", &[&name]
+        ).await.map_err(|e| {
+            log::error!("Error deleting date {:?} from database: {}", name, &e);
+            format!("Unable to delete date from database: {}", &e)
+        })?;
+
+        match n_deleted {
+            0 => Err(DbError(format!("No date with name {:?}.", name))),
+            1 => Ok(()),
+            n => {
+                log::warn!(
+                    "Deleting date {:?} deleted {} records, which shouldn't happen.",
+                    name, n
+                );
+                Ok(())
+            },
+        }
+    }
+
+    pub async fn get_dates(&self) -> Result<HashMap<String, Date>, DbError> {
+        log::trace!("Store::get_dates() called.");
+
+        let client = self.connect().await?;
+        let rows = client.query(
+            "SELECT name, day FROM dates", &[]
+        ).await.map_err(|e| format!("Error querying database for dates: {}", &e))?;
+
+        let mut map: HashMap<String, Date> = HashMap::with_capacity(rows.len());
+        for row in rows.iter() {
+            let name: String = row.try_get("name").map_err(|e| {
+                log::error!("Error getting 'name' from row {:?}: {}", &row, &e);
+                "Error retrieving date name from data DB.".to_string()
+            })?;
+            let date: Date = row.try_get("day").map_err(|e| {
+                log::error!("Error getting 'day' from row {:?}: {}", &row, &e);
+                "Error retrieving date from data DB.".to_string()
+            })?;
+
+            map.insert(name, date);
+        }
+
+        Ok(map)
     }
 }
 

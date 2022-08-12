@@ -8,6 +8,7 @@ const CAL = {
     has_populated: false,
     target_div: document.getElementById("calendar-display"),
     year_selector: document.getElementById("cal-year"),
+    date_form: document.forms["cal-dates-form"],
     date_re: /^[^T]+/,
     month_names: {
         0: "Jan",
@@ -148,6 +149,16 @@ CAL.repaint_dates = function() {
             td.removeAttribute("class");
         }
     }
+
+    for(const td of CAL.target_div.querySelectorAll("td[data-special]")) {
+        td.removeAttribute("data-special");
+    }
+    for(const input of CAL.date_form.elements) {
+        const td = CAL.target_div.querySelector(`td[data-date="${input.value}"]`);
+        if(td) {
+            td.setAttribute("data-special", input.name);
+        }
+    }
 }
 
 CAL.set_local = function(r) {
@@ -184,21 +195,89 @@ CAL.set_local = function(r) {
     }
 }
 
-CAL.populate_cal = function() {
+CAL.populate_dates = function(r) {
+    r.json()
+    .then(j => {
+        console.log("populate-dates body:", j)
+        for(const input of CAL.date_form.elements) {
+            input.value = "";
+        }
+        for(const [date_name, date_str] of Object.entries(j)) {
+            CAL.date_form.elements[date_name].value = date_str;
+        }
+        CAL.repaint_dates();
+    })
+    .catch(RQ.add_err)
+}
+
+CAL.update_date = function(evt) {
+    const data = [this.name, this.value];
+    CAL.request_action("set-date", data, `Setting ${this.name}.`);
+}
+
+CAL.field_response = function(r) {
+    if(!r.ok) {
+        r.text()
+        .then(t => {
+            const err_txt = `${t}\n(${r.status}: ${r.statusText})`;
+            RQ.add_err(err_txt);
+        }
+        ).catch(e => {
+            const e_n = STATE.next_error();
+            const err_txt = `Error #${e_n} (see console)`;
+            console.log(e_n, e, r);
+            RQ.add_err(err_txt);
+        })
+
+        return;
+    }
+
+    let action = r.headers.get("x-camp-action");
+
+    if (!action) {
+        const e_n = STATE.next_error();
+        const err_txt = `CAL: Response lacked x-camp-action header. (See console error #${e_n}.)`;
+        console.log(e_n, r);
+        RQ.add_err(err_txt);
+
+    } else if(action == "populate-cal") {
+        CAL.set_local(r);
+    } else if(action == "populate-dates") {
+        CAL.populate_dates(r);
+    } else {
+        const e_n = STATE.next_error();
+        const err_txt = `CAL: Unrecognized x-camp-action header: ${action}. (See console error #${e_n})`;
+        console.log(e_n, r);
+        RQ.add_err(err_txt);
+    }
+}
+
+CAL.request_action = function(action, body, description) {
     const options = {
         method: "POST",
         headers: {
-            "x-camp-action": "populate-cal",
-        },
-        body: ""
+            "x-camp-action": action,
+        }
     };
+
+    if(body) {
+        const bt = typeof(body);
+        if(bt == "string") {
+            options.headers["content-type"] = "text/plain";
+            options.body = body;
+        } else if(bt == "object") {
+            options.headers["content-type"] = "application/json";
+            options.body = JSON.stringify(body);
+        }
+    }
 
     const r = new Request(
         API_ENDPOINT,
         options
     );
 
-    api_request(r, "Fetching Calendar.", CAL.set_local);
+    const desc = (description || action);
+    api_request(r, desc, CAL.field_response);
 }
 
 CAL.update_cal = function() {
@@ -206,21 +285,7 @@ CAL.update_cal = function() {
         td.setAttribute("class", "m");
     }
 
-    const options = {
-        method: "POST",
-        headers: {
-            "x-camp-action": "update-cal",
-            "content-type": "application/json"
-        },
-        body: JSON.stringify(Array.from(CAL.dates))
-    };
-
-    const r = new Request(
-        API_ENDPOINT,
-        options
-    );
-
-    api_request(r, "Updating Calendar.", CAL.set_local);
+    CAL.request_action("update-cal", Array.from(CAL.dates), "Updating calendar.")
 }
 
 document.getElementById("cal-prev-year")
@@ -241,13 +306,18 @@ CAL.year_selector.addEventListener("change", function(evt) {
     CAL.populate_year(CAL.target_div, Number(this.value));
     CAL.repaint_dates();
 })
+for(input of CAL.date_form.elements) {
+    input.addEventListener("change", CAL.update_date);
+}
+
 document.getElementById("cal-tab-radio")
     .addEventListener("change", () => {
         if(!CAL.has_populated) {
             const cur_year = CAL.current_academic_year();
             CAL.year_selector.value = cur_year;
             CAL.populate_year(CAL.target_div, cur_year);
-            CAL.populate_cal();
+            CAL.request_action("populate-cal", "", "Fetching calendar.");
+            CAL.request_action("populate-dates", "", "Fetching dates.")
             CAL.has_populated = true;
         }
 });
