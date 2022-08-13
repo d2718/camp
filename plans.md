@@ -68,7 +68,7 @@ CREATE TABLE courses (
 );
 
 CREATE TABLE chapters (
-    id       SERIAL PRIMARY KEY,
+    id       BIGSERIAL PRIMARY KEY,
     course   INTEGER REFERENCES courses(id),
     sequence SMALLINT,
     title    TEXT,     /* null should give default-generated title */
@@ -99,14 +99,15 @@ CREATE TABLE calendar (
 
 CREATE TABLE goals (
     id BIGSERIAL PRIMARY KEY,
-    uname   TEXT REFERENCES students(uname),
-    sym     TEXT REFERENCES courses(sym), 
-    custom  BIGINT REFERENCES custom_chapters(id),
+    uname   	TEXT REFERENCES students(uname),
+    sym     	TEXT REFERENCES courses(sym),
+	seq			SMALLINT REFERENCES chapters(sequence),
+    custom  	BIGINT REFERENCES custom_chapters(id),
     review      BOOL,
     incomplete  BOOL,
-    scheduled   DATE,
-    complete    DATE,
-    tries INT,          /* null means 1 if complete */
+    due		    DATE,
+    done	    DATE,
+    tries 		SMALLINT,          /* null means 1 if complete */
     score TEXT
 );
 

@@ -41,3 +41,8 @@ div#calendar-control {
 }
 
 input#cal-year { max-width: 10ex; }
+
+table#cal-dates { margin: 1em 0; }
+
+table#cal-dates td { padding: 0.3ex; }
+table#cal-dates td:first-child { text-align: right; }

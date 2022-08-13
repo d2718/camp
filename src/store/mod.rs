@@ -111,6 +111,35 @@ static SCHEMA: &[(&str, &str, &str)] = &[
         )",
         "DROP TABLE dates",
     ),
+
+    (
+        "SELECT FROM information_schema.tables WHERE table_name = 'custom_chapters'",
+        "CREATE TABLE custom_chapters (
+            id BIGSERIAL PRIMARY KEY,
+            uname   TEXT REFERENCES user(uname),
+            title   TEXT NOT NULL,
+            weight  REAL
+        )",
+        "DROP TABLE custom_chapters",
+    ),
+
+    (
+        "SELECT FROM information_schema.tables WHERE table_name = 'goals'",
+        "CREATE TABLE goals (
+            id          BIGSERIAL PRIMARY KEY,
+            uname       TEXT REFERENCES students(uname),
+            sym         TEXT REFERENCES courses(sym),
+            chapt_id    BIGINT REFERENCES chapters(id),
+            custom      BIGINT REFERENCES custom_chapters(id),
+            review      BOOL,
+            incomplete  BOOL,
+            due         DATE,
+            done        DATE,
+            tries       SMALLINT,
+            score   TEXT
+        )",
+        "DROP TABLE goals",
+    ),
 ];
 
 #[derive(Debug, PartialEq)]

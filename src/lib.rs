@@ -13,6 +13,7 @@ pub mod auth;
 pub mod config;
 pub mod course;
 pub mod inter;
+pub mod pace;
 pub mod store;
 pub mod user;
 

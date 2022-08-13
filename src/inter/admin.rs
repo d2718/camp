@@ -712,6 +712,9 @@ async fn set_date(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
             }
 
             if let Err(e) = glob.refresh_dates().await {
+                log::error!(
+                    "Error calling Glob::refresh_dates(): {}", &e
+                );
                 return text_500(Some("Error retrieving new dates from database.".to_owned()));
             }
         }
@@ -719,7 +722,7 @@ async fn set_date(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
 
         let date = match Date::parse(date_str, DATE_FMT) {
             Ok(d) => d,
-            Err(e) => { return text_500(Some(format!(
+            Err(_) => { return text_500(Some(format!(
                 "Error parsing {:?} as date.", date_str
             ))); },
         };
@@ -736,6 +739,9 @@ async fn set_date(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
             };
         }
         if let Err(e) = glob.refresh_dates().await {
+            log::error!(
+                "Error calling Glob::refresh_dates(): {}", &e
+            );
             return text_500(Some("Error retrieving new dates from database.".to_owned()));
         }
     }
