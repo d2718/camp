@@ -1,7 +1,6 @@
 /*
-`Store` methods et. al. for dealing with `Course` manipulation.
-
-This set is to store information about the courses.
+`Store` methods et. al. for dealing with `Course` and
+`Chapter` storage, update, and retrieval.
 
 ```sql
 

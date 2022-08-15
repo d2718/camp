@@ -313,12 +313,12 @@ for(input of CAL.date_form.elements) {
 document.getElementById("cal-tab-radio")
     .addEventListener("change", () => {
         if(!CAL.has_populated) {
+            CAL.has_populated = true;
             const cur_year = CAL.current_academic_year();
             CAL.year_selector.value = cur_year;
             CAL.populate_year(CAL.target_div, cur_year);
             CAL.request_action("populate-cal", "", "Fetching calendar.");
             CAL.request_action("populate-dates", "", "Fetching dates.")
-            CAL.has_populated = true;
         }
 });
 document.getElementById("cal-update")

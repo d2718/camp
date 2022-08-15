@@ -82,7 +82,7 @@ static SCHEMA: &[(&str, &str, &str)] = &[
     (
         "SELECT FROM information_schema.tables WHERE table_name = 'students'",
         "CREATE TABLE students (
-            uname   TEXT REFERENCES users(uname),
+            uname   TEXT UNIQUE REFERENCES users(uname),
             last    TEXT,
             rest    TEXT,
             teacher TEXT REFERENCES teachers(uname),

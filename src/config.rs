@@ -116,6 +116,7 @@ pub struct Glob {
     pub calendar: Vec<Date>,
     pub dates: HashMap<String, Date>,
     pub courses: HashMap<i64, Course>,
+    pub course_syms: HashMap<String, i64>,
     pub users: HashMap<String, User>,
     pub addr: SocketAddr,
 }
@@ -141,6 +142,10 @@ impl<'a> Glob {
         let new_courses = self.data.read().await.get_courses().await
             .map_err(|e| format!("Error retrieving course information from Data DB: {}", &e))?;
         self.courses = new_courses;
+        let new_sym_map: HashMap<String, i64> = self.courses.iter()
+            .map(|(id, crs)| (crs.sym.clone(), *id))
+            .collect();
+        self.course_syms = new_sym_map;
         Ok(())
     }
 
@@ -159,6 +164,13 @@ impl<'a> Glob {
             .map_err(|e| format!("Error retrieving special dates from Data DB: {}", &e))?;
         self.dates = new_dates;
         Ok(())
+    }
+
+    pub fn course_by_sym(&self, sym: &str) -> Option<&Course> {
+        match self.course_syms.get(sym) {
+            Some(id) => self.courses.get(id),
+            None => None,
+        }
     }
 
     /// Insert the given user into both the auth and the data databases.
@@ -550,6 +562,7 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
         dates: HashMap::new(),
         calendar: Vec::new(),
         courses: HashMap::new(),
+        course_syms: HashMap::new(),
         users: HashMap::new(),
         addr: cfg.addr,
     };
@@ -561,7 +574,10 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
     log::info!("Retrieved {} users from data DB.", glob.users.len());
 
     glob.refresh_calendar().await?;
-    log::info!("Retrieved {} dates from data DB.", glob.calendar.len());
+    log::info!("Retrieved {} instructional days from data DB.", glob.calendar.len());
+
+    glob.refresh_dates().await?;
+    log::info!("Retrieved {} special dates from data DB.", glob.dates.len());
 
     inter::init(&cfg.templates_dir)?;
 

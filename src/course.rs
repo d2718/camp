@@ -229,6 +229,7 @@ pub struct Course {
     pub book: String,
     pub title: String,
     pub level: f32,
+    pub weight: Option<f32>,
     chapters: Vec<Chapter>,
 }
 
@@ -294,6 +295,10 @@ impl Course {
         }
         
         chapters.shrink_to_fit();
+        if chapters.len() == 0 {
+            return Err("Course file contains no chapters.".to_owned());
+        }
+        let weight = Some(chapters.iter().map(|ch| ch.weight).sum());
         
         let c = Course {
             id: 0,
@@ -301,18 +306,20 @@ impl Course {
             book: head.book,
             title: head.title,
             level: head.level,
+            weight,
             chapters
         };
         Ok(c)
     }
 
     pub fn new(id: i64, sym: String, book: String, title: String, level: f32) -> Self {
-        Self { id, sym, book, title, level, chapters: Vec::new() }
+        Self { id, sym, book, title, level, weight: None, chapters: Vec::new() }
     }
 
     /// Builder-pattern method to add `Chapter`s after the fact.
     pub fn with_chapters(self, chapters: Vec<Chapter>) -> Self {
         let mut new = self;
+        new.weight = Some(chapters.iter().map(|ch| ch.weight).sum());
         new.chapters = chapters;
         new
     }

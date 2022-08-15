@@ -468,7 +468,7 @@ impl Db {
     
     This is largely for cleanup after testing.
     */
-    async fn nuke_database(&self) -> Result<(), DbError> {
+    pub async fn nuke_database(&self) -> Result<(), DbError> {
         log::trace!("Db::nuke_database() called");
         let mut client = self.connect().await?;
         let t = client.transaction().await
