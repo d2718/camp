@@ -78,6 +78,11 @@ The argument is the path to the directory where the templates used by
 `serve_template()` can be found.
 */
 pub fn init<P: AsRef<Path>>(template_dir: P) -> Result<(), String> {
+    if TEMPLATES.get().is_some() {
+        log::warn!("Templates directory already initialized; ignoring.");
+        return Ok(())
+    }
+
     let template_dir = template_dir.as_ref();
 
     let mut h = Handlebars::new();

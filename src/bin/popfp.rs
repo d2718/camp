@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 /*!
 Populating the local "fake production" environment with sufficient data
 to allow some experimentation.
@@ -14,9 +16,17 @@ use simplelog::{ColorChoice, TerminalMode, TermLogger};
 
 use camp::*;
 use camp::{
+    config::Glob,
     course::{Course},
+    pace::Pace,
     user::{BaseUser, Role, Student, Teacher, User},
 };
+
+static CONFIG: &str = "fakeprod_data/config.toml";
+static COURSE_DIR: &str = "fakeprod_data/courses";
+static STAFF_CSV: &str = "fakeprod_data/staff.csv";
+static STUDENT_CSV: &str = "fakeprod_data/students.csv";
+static GOALS_CSV: &str = "fakeprod_data/goals.csv";
 
 /**
 CSV file format:
@@ -88,6 +98,7 @@ fn csv_file_to_staff<R: Read>(r: R) -> Result<Vec<User>, String> {
     Ok(users)
 }
 
+/// Read courses from all ".mix" files in the specified directory.
 fn read_course_dir<P: AsRef<Path>>(p: P) -> Result<Vec<Course>, String> {
     let p = p.as_ref();
     log::trace!("read_course_dir( {} ) called.", p.display());
@@ -134,9 +145,20 @@ fn read_course_dir<P: AsRef<Path>>(p: P) -> Result<Vec<Course>, String> {
     Ok(courses)
 }
 
+#[cfg(feature = "fake")]
+async fn nuke(glob: Glob) -> Result<(), UnifiedError> {
+    log::info!("Attempting to nuke current database info.");
+    glob.data().read().await.nuke_database().await?;
+    glob.auth().read().await.nuke_database().await?;
+    log::info!("Current data nuked.");
+
+    Ok(())
+}
+
+#[cfg(feature = "fake")]
 #[tokio::main(flavor = "current_thread")]
-    async fn main() -> Result<(), UnifiedError> {
-        let log_cfg = simplelog::ConfigBuilder::new()
+async fn main() -> Result<(), UnifiedError> {
+    let log_cfg = simplelog::ConfigBuilder::new()
         .add_filter_allow_str("camp")
         .build();
     TermLogger::init(
@@ -147,5 +169,41 @@ fn read_course_dir<P: AsRef<Path>>(p: P) -> Result<Vec<Course>, String> {
     ).unwrap();
     log::info!("Logging started.");
 
+    let glob = config::load_configuration(CONFIG).await?;
+    nuke(glob).await?;
+    let mut glob = config::load_configuration(CONFIG).await?;
+    {
+        let courses = read_course_dir(COURSE_DIR)?;
+        let data = glob.data();
+        data.read().await.insert_courses(&courses).await?;
+    }
+    let users = csv_file_to_staff(File::open(STAFF_CSV).unwrap())?;
+    for u in users.iter() {
+        glob.insert_user(u).await?;
+    }
+    glob.refresh_courses().await?;
+    glob.refresh_users().await?;
+
+    {
+        let stud_csv = std::fs::read_to_string(STUDENT_CSV).unwrap();
+        glob.upload_students(&stud_csv).await?;
+    }
+    glob.refresh_users().await?;
+
+    log::info!(
+        "Inserted {} Users and {} Courses.",
+        &glob.users.len(), &glob.courses.len()
+    );
+
+    let mut n_g_ins: usize = 0;
+    let paces = Pace::from_csv(File::open(GOALS_CSV).unwrap(), &glob)?;
+    for p in paces.iter() {
+        n_g_ins += glob.insert_goals(&p.goals).await?;
+    }
+    log::info!("Inserted {} Goals.", n_g_ins);
+
     Ok(())
 }
+
+#[cfg(not(feature = "fake"))]
+fn main() { println!("World up."); }

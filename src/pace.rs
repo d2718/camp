@@ -539,5 +539,6 @@ mod tests {
             println!("{:#?}", goal);
         }
 
+        teardown_env(g).await.unwrap();
     }
 }

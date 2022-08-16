@@ -1,7 +1,7 @@
 /*!
 Structs to hold configuration data and global variables.
 */
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Write};
 use std::io::Cursor;
 use std::net::SocketAddr;
@@ -17,6 +17,7 @@ use crate::{
     auth, auth::AuthResult,
     course::Course,
     inter,
+    pace::{BookCh, Goal, Source},
     store::Store,
     UnifiedError,
     user::{BaseUser, Role, Student, Teacher, User},
@@ -424,6 +425,70 @@ impl<'a> Glob {
         }
 
         return stud_refs;
+    }
+
+    pub async fn insert_goals(
+        &self,
+        goals: &[Goal]
+    ) -> Result<usize, UnifiedError> {
+        log::trace!(
+            "Glob::insert_goals( [ {} Goals ] ) called.", &goals.len()
+        );
+
+        // First we want to check the unames courses on all the goals and
+        // ensure those exist before we start trying to insert. This will
+        // allow us to produce a better error message for the user.
+        {
+            let mut unk_users: HashSet<String> = HashSet::new();
+            let mut unk_courses: HashSet<String> = HashSet::new();
+            for g in goals.iter() {
+                match self.users.get(&g.uname) {
+                    Some(User::Student(_)) => { /* This is what we hope is true! */ },
+                    _ => { unk_users.insert(g.uname.clone()); }
+                }
+                match g.source {
+                    Source::Book(ref bch) => {
+                        if let None = self.course_syms.get(&bch.sym) {
+                            unk_courses.insert(bch.sym.clone());
+                        }
+                    },
+                    _ => { 
+                        return Err("Custom Courses not yet supported.".to_owned().into()); 
+                    },
+                }
+            }
+
+            if unk_users.len() > 0 || unk_courses.len() > 0 {
+                let mut estr = String::new();
+                if unk_users.len() > 0 {
+                    writeln!(
+                        &mut estr,
+                        "The following user names do not belong to known students:"
+                    ).map_err(|e| format!("Error preparing error message: {}!!!", &e))?;
+                    for uname in unk_users.iter() {
+                        writeln!(&mut estr, "{}", uname).map_err(|e| format!(
+                            "Error preparing error message: {}!!!", &e
+                        ))?;
+                    }
+                }
+                if unk_courses.len() > 0 {
+                    writeln!(
+                        &mut estr,
+                        "The following symbols do not belong to known courses:"
+                    ).map_err(|e| format!("Error preparing error message: {}!!!", &e))?;
+                    for sym in unk_courses.iter() {
+                        writeln!(&mut estr, "{}", sym).map_err(|e| format!(
+                            "Error preparing error message: {}!!!", &e
+                        ))?;
+                    }
+                }
+
+                return Err(estr.into());
+            }
+        }
+
+        let n_inserted = self.data.read().await.insert_goals(goals).await?;
+        Ok(n_inserted)
     }
 }
 

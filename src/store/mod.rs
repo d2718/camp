@@ -14,6 +14,7 @@ use rand::{Rng, distributions};
 use crate::course::{Course, Chapter, Custom};
 mod cal;
 mod courses;
+mod goals;
 mod users;
 
 const DEFAULT_SALT_LENGTH: usize = 4;
@@ -129,14 +130,14 @@ static SCHEMA: &[(&str, &str, &str)] = &[
             id          BIGSERIAL PRIMARY KEY,
             uname       TEXT REFERENCES students(uname),
             sym         TEXT REFERENCES courses(sym),
-            chapt_id    BIGINT REFERENCES chapters(id),
+            seq         SMALLINT,
             custom      BIGINT REFERENCES custom_chapters(id),
             review      BOOL,
             incomplete  BOOL,
             due         DATE,
             done        DATE,
             tries       SMALLINT,
-            score   TEXT
+            score       TEXT
         )",
         "DROP TABLE goals",
     ),
@@ -280,7 +281,7 @@ impl Store {
     This is only meant for cleanup after testing. It is advisable to look at
     the ERROR level log output when testing to ensure this method did its job.
     */
-    #[cfg(test)]
+    #[cfg(any(test, feature = "fake"))]
     pub async fn nuke_database(&self) -> Result<(), DbError> {
         log::trace!("Store::nuke_database() called.");
 
