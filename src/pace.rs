@@ -48,7 +48,7 @@ pub struct Goal {
     pub incomplete: bool,
     pub due: Option<Date>,
     pub done: Option<Date>,
-    pub tries: i16,
+    pub tries: Option<i16>,
     // Should get set in the constructor of the `Pace` calendar.
     pub weight: f32,
     pub score: Option<String>,
@@ -195,7 +195,7 @@ impl Goal {
             // No goals read from .csv files can possibly be done.
             done: None,
             // Will get set once it's done.
-            tries: 0,
+            tries: None,
             // Will get set in the `Pace` calendar constructror.
             weight: 0.0,
             // Goals read from .csv files should have no score yet.
@@ -304,6 +304,70 @@ fn affirm_goal(mut g: Goal, glob: &Glob) -> Result<Goal, String> {
 }
 
 impl Pace {
+	pub fn new(
+		s: Student,
+		t: Teacher,
+		mut goals: Vec<Goal>,
+		glob: &Glob
+	) -> Result<Pace, String> {
+		log::trace!(
+		"Pace::new( [ Student {:?} ], [ Teacher {:?} ], [ {} Goals ] ) called.",
+			&s.base.uname, &t.base.uname, &goals.len()
+		);
+		
+		goals.sort();
+        let now = crate::now();
+
+        let mut total_weight: f32 = 0.0;
+        let mut due_weight: f32 = 0.0;
+        let mut done_weight: f32 = 0.0;
+        for g in goals.iter_mut() {
+            let source = match &mut g.source {
+                Source::Book(bch) => bch,
+                _ => { return Err("Custom chapters not supported.".into()); },
+            };
+            let crs = match glob.course_by_sym(&source.sym) {
+                Some(crs) => crs,
+                None => { return Err(format!("Unknown course symbol {:?}", &source.sym)); },
+            };
+            let chp = match crs.chapter(source.seq) {
+                Some(chp) => chp,
+                None => { return Err(format!(
+                    "Course {:?} ({}) doesn't have a chapter {}.",
+                    &source.sym, &crs.title, &source.seq
+                )); },
+            };
+
+            let weight = match crs.weight {
+                Some(w) => chp.weight / w,
+                None => { return Err(format!(
+                    "Course {:?} ({}) has not had its weights set.", &source.sym, &crs.title
+                )); },
+            };
+
+            source.level = crs.level;
+            g.weight = weight;
+            if let Some(due_date) = &g.due {
+                total_weight += weight;
+                if due_date < &now { due_weight += weight; }
+            }
+            if let Some(_) = &g.done {
+                done_weight += weight;
+            }
+        }
+
+        let p = Pace {
+            student: s,
+            teacher: t,
+            goals,
+            total_weight,
+            due_weight,
+            done_weight,
+        };
+
+       Ok(p)
+	}
+
     pub fn from_csv<R: Read>(
         r: R,
         glob: &Glob
@@ -398,6 +462,40 @@ impl Pace {
         }
 
         Ok(cals)
+    }
+
+    pub fn autopace(&mut self, dates: &[Date]) -> Result<(), String> {
+        log::trace!(
+            "Pace[ {:?} ]::autopace( [ {} dates ] ) called.",
+            &self.student.base.uname, &dates.len()
+        );
+
+        if dates.is_empty() {
+            return Err("You require 1 or more Dates in order to autopace a Pace calendar.".into());
+        }
+        let total_n_due = self.goals.iter().filter(|g| g.due.is_some()).count();
+        if total_n_due < 2 {
+            return Err("You require at least 2 Goals with due dates in order to autopace.".into());
+        }
+
+        // This is really to prevent division by zero.
+        if self.total_weight < 0.001 {
+            return Err("This student doesn't have enough material with due dates to autopace.".into());
+        }
+
+        let mut running_weight: f32 = 0.0;
+        let n_dates: f32 = dates.len() as f32;
+        for g in self.goals.iter_mut() {
+            if let Some(d) = &mut g.due {
+                running_weight += g.weight;
+                let frac = running_weight / self.total_weight;
+                let idx = (n_dates * frac).ceil() as usize;
+                let due = dates[idx-1];
+                *d = due;
+            }
+        }
+
+        Ok(())
     }
 }
 

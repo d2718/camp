@@ -28,28 +28,30 @@ use crate::{
     user::{Student, Teacher},
 };
 
-/* fn goal_from_row(row: &Row) -> Result<Goal, DbError> {
+fn goal_from_row(row: &Row) -> Result<Goal, DbError> {
     let bkch = BookCh {
+        sym: row.try_get("sym")?,
+        seq: row.try_get("seq")?,
+        // Gets set in the `Pace` constructor.
+        level: 0.0,
+    };
 
-    }
     Ok(Goal {
         id: row.try_get("id")?,
-        uname: row.try_get("uname")?;
-
+        uname: row.try_get("uname")?,
+        source: Source::Book(bkch),
+        review: row.try_get("review")?,
+        incomplete: row.try_get("incomplete")?,
+        due: row.try_get("due")?,
+        done: row.try_get("done")?,
+        tries: row.try_get("tries")?,
+        // Gets set in the `Pace` constructor.
+        weight: 0.0,
+        score: row.try_get("score")?
     })
-} */
+}
 
 impl Store {
-/*     pub async fn get_student_goals(&self, uname: &str) -> Result<Vec<Goal>, DbError> {
-        log::trace!("Store::get_student_goals( {:?} ) called.", uname);
-
-        let client = self.connect().await?;
-        let rows = client.execute(
-            "SELECT * FROM goals WHERE uname = $1", &[&uname]
-        ).await?;
-
-    } */
-
     pub async fn insert_goals(
         &self,
         goals: &[Goal]
@@ -121,5 +123,33 @@ impl Store {
         t.commit().await?;
 
         Ok(n_inserted as usize)
+    }
+
+    pub async fn get_goals_by_student(
+        &self,
+        uname: &str
+    ) -> Result<Vec<Goal>, DbError> {
+        log::trace!("Store::get_goals_by_student( {:?} ) called.", uname);
+
+        let client = self.connect().await?;
+        
+        let rows = client.query(
+            "SELECT * FROM goals WHERE uname = $1",
+            &[&uname]
+        ).await?;
+
+        let mut goals: Vec<Goal> = Vec::with_capacity(rows.len());
+        for row in rows.iter() {
+            match goal_from_row(&row) {
+                Ok(g) => { goals.push(g); },
+                Err(e) => {
+                    return Err(DbError(format!(
+                        "Unable to read Goal from database: {}", &e
+                    )));
+                }
+            }
+        }
+
+        Ok(goals)
     }
 }

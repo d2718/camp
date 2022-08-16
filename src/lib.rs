@@ -3,6 +3,8 @@
 
 use std::fmt::{Display, Write};
 
+use once_cell::sync::Lazy;
+
 use time::{
     Date,
     format_description::FormatItem,
@@ -18,6 +20,13 @@ pub mod store;
 pub mod user;
 
 const DATE_FMT: &[FormatItem] = format_description!("[year]-[month]-[day]");
+static EPOCH: Lazy<Date> = Lazy::new(|| 
+    Date::from_calendar_date(
+        1970,
+        time::Month::January,
+        1
+    ).unwrap()
+);
 
 #[derive(Debug)]
 pub enum UnifiedError {
@@ -59,6 +68,14 @@ pub fn blank_string_means_none<S: AsRef<str>>(s: Option<S>) -> Option<S> {
             _ => Some(x),
         }
     }
+}
+
+pub fn now() -> time::Date {
+    let since_epoch = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap();
+    let secs_since_epoch = since_epoch.as_secs() as i64;
+    let duration_since_epoch = time::Duration::seconds(secs_since_epoch);
+    EPOCH.saturating_add(duration_since_epoch)
 }
 
 #[cfg(unix)]

@@ -17,7 +17,7 @@ use crate::{
     auth, auth::AuthResult,
     course::Course,
     inter,
-    pace::{BookCh, Goal, Source},
+    pace::{BookCh, Goal, Pace, Source},
     store::Store,
     UnifiedError,
     user::{BaseUser, Role, Student, Teacher, User},
@@ -490,6 +490,36 @@ impl<'a> Glob {
         let n_inserted = self.data.read().await.insert_goals(goals).await?;
         Ok(n_inserted)
     }
+
+    pub async fn get_pace_by_student(
+        &self,
+        uname: &str
+    ) -> Result<Pace, UnifiedError> {
+        log::trace!("Glob::get_pace_by_student( {:?} ) called.", uname);
+
+        let stud = match self.users.get(uname) {
+            Some(User::Student(s)) => s.clone(),
+            _ => {
+                return Err(format!(
+                    "{:?} is not a Student in the database.", uname
+                ).into());
+            }
+        };
+        let teach = match self.users.get(&stud.teacher) {
+            Some(User::Teacher(t)) => t.clone(),
+            _ => {
+                return Err(format!(
+                    "{:?} has teacher {:?}, but {:?} is not a teacher.",
+                    &stud.base.uname, &stud.teacher, &stud.teacher
+                ).into());
+            }
+        };
+
+        let goals = self.data.read().await.get_goals_by_student(uname).await?;
+
+        let p = Pace::new(stud, teach, goals, &self)?;
+        Ok(p)
+    }
 }
 
 async fn insert_default_admin_into_data_db(
@@ -647,4 +677,58 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
     inter::init(&cfg.templates_dir)?;
 
     Ok(glob)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+    use crate::pace::{Pace, Source};
+    use crate::tests::ensure_logging;
+
+    use serial_test::serial;
+
+    static CONFIG: &str = "fakeprod_data/config.toml";
+
+    #[tokio::test]
+    #[serial]
+    async fn get_one_pace() -> Result<(), UnifiedError> {
+        ensure_logging();
+
+        let glob = config::load_configuration(CONFIG).await?;
+
+        let p = glob.get_pace_by_student("eparker").await?;
+        println!("{:#?}", &p);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn autopace() -> Result<(), UnifiedError> {
+        ensure_logging();
+
+        let glob = config::load_configuration(CONFIG).await?;
+
+        let mut p: Pace = glob.get_pace_by_student("wholt").await?;
+        p.autopace(&glob.calendar)?;
+        for g in p.goals.iter() {
+            let source = match &g.source {
+                Source::Book(src) => src,
+                _ => panic!("No custom chapters!"),
+            };
+
+            let crs = glob.course_by_sym(&source.sym).unwrap();
+            let chp = crs.chapter(source.seq).unwrap();
+            let datestr = match g.due {
+                None => "None".to_string(),
+                Some(d) => format!("{}", &d),
+            };
+            println!(
+                "{}: {} {} {:?}",
+                &g.id, &crs.title, &chp.title, &datestr
+            );
+        }
+
+        Ok(())
+    }
 }
