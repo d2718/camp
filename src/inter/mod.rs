@@ -26,6 +26,7 @@ use crate::auth::AuthResult;
 use crate::config::Glob;
 
 pub mod admin;
+pub mod teacher;
 
 static TEMPLATES: OnceCell<Handlebars> = OnceCell::new();
 

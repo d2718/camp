@@ -32,7 +32,9 @@ struct ConfigFile {
     admin_email: Option<String>,
     host: Option<String>,
     port: Option<u16>,
-    templates_dir: Option<String>
+    templates_dir: Option<String>,
+    students_per_teacher: Option<usize>,
+    goals_per_student: Option<usize>
 }
 
 #[derive(Debug)]
@@ -44,6 +46,8 @@ pub struct Cfg {
     pub default_admin_email: String,
     pub addr: SocketAddr,
     pub templates_dir: PathBuf,
+    pub students_per_teacher: usize,
+    pub goals_per_student: usize,
 }
 
 impl std::default::Default for Cfg {
@@ -59,6 +63,8 @@ impl std::default::Default for Cfg {
                 8001
             ),
             templates_dir: PathBuf::from("templates/"),
+            students_per_teacher: 60,
+            goals_per_student: 16,
         }
     }
 }
@@ -120,6 +126,8 @@ pub struct Glob {
     pub course_syms: HashMap<String, i64>,
     pub users: HashMap<String, User>,
     pub addr: SocketAddr,
+    pub goals_per_student: usize,
+    pub students_per_teacher: usize,
 }
 
 impl<'a> Glob {
@@ -409,6 +417,21 @@ impl<'a> Glob {
         Ok(())
     }
 
+    pub async fn update_password(
+        &self,
+        uname: &str,
+        new_password: &str
+    ) -> Result<(), UnifiedError> {
+        log::trace!("Glob::update_password( {:?}, ... ) called.", uname);
+
+        let u = self.users.get(uname).ok_or_else(|| format!(
+            "There is no user with uname {:?}.", uname
+        ))?;
+
+        self.auth.read().await.set_password(uname, new_password, u.salt()).await?;
+        Ok(())
+    }
+
     pub fn get_students_by_teacher(
         &'a self,
         teacher_uname: &'_ str
@@ -519,6 +542,63 @@ impl<'a> Glob {
 
         let p = Pace::new(stud, teach, goals, &self)?;
         Ok(p)
+    }
+
+    pub async fn get_paces_by_teacher(
+        &self,
+        tuname: &str
+    ) -> Result<Vec<Pace>, UnifiedError> {
+        log::trace!("Glob::get_paces_by_teacher( {:?} ) called.", tuname);
+
+        let teach = match self.users.get(tuname) {
+            Some(User::Teacher(t)) => t.clone(),
+            _ => {
+                return Err(format!(
+                    "{:?} is not a Teacher in the database.", tuname
+                ).into());
+            },
+        };
+
+        let mut goals = self.data.read().await.get_goals_by_teacher(tuname).await?;
+
+        let mut goal_map: HashMap<String, Vec<Goal>> =
+            HashMap::with_capacity(self.students_per_teacher);
+        
+        for g in goals.drain(..) {
+            if let Some(v) = goal_map.get_mut(&g.uname) {
+                (*v).push(g)
+            } else {
+                let uname = g.uname.clone();
+                let v = vec![g];
+                goal_map.insert(uname, v);
+            }
+        }
+
+        let mut cals: Vec<Pace> = Vec::with_capacity(goal_map.len());
+        for (uname, v) in goal_map.drain() {
+            let s = match self.users.get(&uname) {
+                Some(User::Student(s)) => s.clone(),
+                x => {
+                    log::error!(
+                        "Vector of goals belonging to {:?}, but this uname belongs not to a Student in the database ({:?}).",
+                        &uname, &x
+                    );
+                    continue;
+                },
+            };
+
+            let p = match Pace::new(s, teach.clone(), v, &self) {
+                Ok(p) => p,
+                Err(e) => {
+                    log::error!("Error generating Pace calendar for {:?}: {}", &uname, &e);
+                    continue;
+                },
+            };
+
+            cals.push(p);
+        }
+
+        Ok(cals)
     }
 }
 
@@ -660,6 +740,8 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
         course_syms: HashMap::new(),
         users: HashMap::new(),
         addr: cfg.addr,
+        goals_per_student: cfg.goals_per_student,
+        students_per_teacher: cfg.students_per_teacher,
     };
 
     glob.refresh_courses().await?;

@@ -462,6 +462,38 @@ impl Db {
         
         Ok(n_culled as usize)
     }
+
+    pub async fn set_password(
+        &self,
+        uname: &str,
+        password: &str,
+        salt: &str
+    ) -> Result<(), DbError> {
+        log::trace!(
+            "Db::set_password( &T, {:?}, ... , {:?} ) called.",
+            uname, salt
+        );
+
+        let new_hash = hash_with_salt(password, salt.as_bytes());
+        let client = self.connect().await?;
+
+        match client.execute(
+            "UPDATE users SET hash = $1
+                WHERE uname = $2",
+            &[&new_hash, &uname]
+        ).await {
+            Err(e) => Err(DbError(format!("Error setting password for {:?}: {}", uname, &e))),
+            Ok(0) => Err(DbError(format!("No user {:?} in auth DB.", uname))),
+            Ok(1) => Ok(()),
+            Ok(n) => {
+                log::warn!(
+                    "Updating password for {:?} updated {} records in the auth DB.",
+                    uname, &n
+                );
+                Ok(())
+            },
+        }
+    }
     
     /** 
     Drop both database tables.

@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>CAMP | {{name}} Teacher View</title>
+        <link rel="stylesheet" href="/static/teacher.css">
+        <link rel="stylesheet" href="/static/util.css">
+        <link rel="icon" type="image/png" href="/static/camp_icon.png">
+        <script>
+const AUTH = {
+    uname: "{{uname}}",
+    key: "{{key}}"
+};
+        </script>
+        <script src="/static/teacher.js" defer></script>
+    </head>
+    <body>
+        <div id="content-container">
+            <h1>Teacher {{uname}} ({{name}})</h1>
+            <div id="cals"></div>
+        </div>
+
+        <div id="course-info"></div>
+
+        <div id="progress">
+            <img src="/static/blue_waiting.gif">
+            <ul></ul>
+        </div>
+
+        <div id="error">
+            <img src="/static/error.svg">
+            <ul></ul>
+            <button>
+                <label><img src="/static/dismiss.svg"></label>
+            </button>
+        </div>
+
+        <dialog id="are-you-sure">
+            <h1>&iquest;Are you sure?</h1>
+            <p id="are-you-sure-message"></p>
+            <form name="confirmation" method="dialog">
+                <button id="confirmation-cancel" value="cancel">
+                    <label class="cancel">No, I am not.</label>
+                </button>
+                <button id="confirmation-confirm" value="ok">
+                    <label class="confirm">Yes, I sure am.</label>
+                </button>
+            </form>
+        </dialog>
+
+        <div id="old-browser">
+            <div>
+                <h2>Update your Browser</h2>
+
+                <p>Because I am lazy, this web interface relies on a
+                <em>relatively</em> modern browser feature, which your
+                browser evidently doesn't support. A version at least as
+                recent as one of the following should do the trick:</p>
+
+                <ul>
+                    <li>Chrome version 37 (August 2014)</li>
+                    <li>Firefox version 98 (March 2022)</li>
+                    <li>Safari version 15.4 (March 2022)</li>
+                    <li>MS Edge 79 (January 2020)</li>
+                    <li>Opera 24 (September 2014)</li>
+                </ul>
+            </div>
+        </div>
+
+        <script src="/static/util.js"></script>
+    </body>
+</html>

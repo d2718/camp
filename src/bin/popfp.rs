@@ -35,15 +35,16 @@ CSV file format:
 DOES have a header.)
 
 ```csv
-role, uname, email, name
-a,    root,  root@not.an.email
-b,    boss,  boss@our.system.com
-t,    jenny, jenny@camelotacademy.org, Jenny Feaster
-t,    irfan, irfan@camelotacademy.org, Irfan Azam
+role, uname, email, password, name
+a,    root,  root@not.an.email,        toot
+b,    boss,  boss@our.system.com,      bpwd
+t,    jenny, jenny@camelotacademy.org, jpwd, Jenny Feaster
+t,    irfan, irfan@camelotacademy.org, ipwd, Irfan Azam
 # ... etc
 ```
 */
-fn csv_file_to_staff<R: Read>(r: R) -> Result<Vec<User>, String> {
+fn csv_file_to_staff<R: Read>(r: R)
+-> Result<(Vec<User>, Vec<String>), String> {
     log::trace!("csv_file_to_staff( ... ) called.");
 
     let mut csv_reader = csv::ReaderBuilder::new()
@@ -54,6 +55,7 @@ fn csv_file_to_staff<R: Read>(r: R) -> Result<Vec<User>, String> {
         .from_reader(r);
     
     let mut users: Vec<User> = Vec::new();
+    let mut pwds: Vec<String> = Vec::new();
 
     for (n, res) in csv_reader.records().enumerate() {
         let rec = res.map_err(|e| format!(
@@ -75,13 +77,16 @@ fn csv_file_to_staff<R: Read>(r: R) -> Result<Vec<User>, String> {
         let email = rec.get(2)
             .ok_or_else(|| format!("Line {}: no email.", &n))?
             .to_owned();
+        let pwd = rec.get(3)
+            .ok_or_else(|| format!("Line {}: no password.", &n))?
+            .to_owned();
         
         let bu = BaseUser { uname, role, email, salt: String::new() };
         let u = match role {
             Role::Admin => bu.into_admin(),
             Role::Boss => bu.into_boss(),
             Role::Teacher => {
-                let name = rec.get(3)
+                let name = rec.get(4)
                     .ok_or_else(|| format!(
                         "Line {}: no name for teacher.", &n
                     ))?;
@@ -93,9 +98,10 @@ fn csv_file_to_staff<R: Read>(r: R) -> Result<Vec<User>, String> {
         };
 
         users.push(u);
+        pwds.push(pwd);
     }
 
-    Ok(users)
+    Ok((users, pwds))
 }
 
 /// Read courses from all ".mix" files in the specified directory.
@@ -177,12 +183,15 @@ async fn main() -> Result<(), UnifiedError> {
         let data = glob.data();
         data.read().await.insert_courses(&courses).await?;
     }
-    let users = csv_file_to_staff(File::open(STAFF_CSV).unwrap())?;
+    let (users, pwds) = csv_file_to_staff(File::open(STAFF_CSV).unwrap())?;
     for u in users.iter() {
         glob.insert_user(u).await?;
     }
     glob.refresh_courses().await?;
     glob.refresh_users().await?;
+    for (u, pwd) in users.iter().zip(pwds.iter()) {
+        glob.update_password(u.uname(), pwd.as_str()).awaitz?;
+    }
 
     {
         let stud_csv = std::fs::read_to_string(STUDENT_CSV).unwrap();

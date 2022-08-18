@@ -9,7 +9,6 @@ const CAL = {
     target_div: document.getElementById("calendar-display"),
     year_selector: document.getElementById("cal-year"),
     date_form: document.forms["cal-dates-form"],
-    date_re: /^[^T]+/,
     month_names: {
         0: "Jan",
         1: "Feb",
@@ -33,13 +32,7 @@ const CAL = {
         }
     },
 };
-CAL.from_iso = function(isostr) {
-    const full = `${isostr}T17:00:00`;
-    return new Date(full);
-}
-CAL.to_iso = function(date) {
-    return date.toISOString().match(CAL.date_re)[0];
-}
+
 CAL.toggle_on_mousedown = function() {
     const date = this.getAttribute("data-date");
     if(CAL.dates.delete(date)) {
@@ -105,7 +98,7 @@ CAL.make_month = function(year, month) {
             current_tr = document.createElement("tr");
         }
         const td = document.createElement("td");
-        td.setAttribute("data-date", CAL.to_iso(current_day));
+        td.setAttribute("data-date", UTIL.date2iso(current_day));
         td.addEventListener("mousedown", CAL.toggle_on_mousedown);
         td.addEventListener("mouseover", CAL.set_on_drag);
         td.appendChild(document.createTextNode(current_day.getDate()));
@@ -127,7 +120,7 @@ CAL.make_month = function(year, month) {
 }
 
 CAL.populate_year = function(target_elt, year) {
-    recursive_clear(target_elt);
+    UTIL.clear(target_elt);
 
     for(let m = 7; m < 12; m++) {
         target_elt.appendChild(

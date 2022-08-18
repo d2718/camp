@@ -152,4 +152,38 @@ impl Store {
 
         Ok(goals)
     }
+
+    pub async fn get_goals_by_teacher(
+        &self,
+        tuname: &str
+    ) -> Result<Vec<Goal>, DbError> {
+        log::trace!("Store::get_goals_by_teacher( {:?} ) called.", tuname);
+
+        let client = self.connect().await?;
+
+        let rows = client.query(
+            "SELECT
+                id, goals.uname, sym, seq, custom, review, incomplete,
+                due, done, tries, score
+            FROM
+                goals INNER JOIN students ON goals.uname = students.uname
+            WHERE
+                students.teacher = $1",
+            &[&tuname]
+        ).await?;
+
+        let mut goals: Vec<Goal> = Vec::with_capacity(rows.len());
+        for row in rows.iter() {
+            match goal_from_row(&row) {
+                Ok(g) => { goals.push(g); },
+                Err(e) => {
+                    log::warn!(
+                        "Fetching goals for teacher {:?}: {}.", tuname, &e
+                    );
+                },
+            }
+        }
+
+        Ok(goals)
+    }
 }

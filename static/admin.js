@@ -49,10 +49,10 @@ function populate_users(r) {
         console.log(j);
 
         DATA.users = new Map();
-        recursive_clear(DISPLAY.admin_tbody);
-        recursive_clear(DISPLAY.boss_tbody);
-        recursive_clear(DISPLAY.teacher_tbody);
-        recursive_clear(DISPLAY.student_tbody);
+        UTIL.clear(DISPLAY.admin_tbody);
+        UTIL.clear(DISPLAY.boss_tbody);
+        UTIL.clear(DISPLAY.teacher_tbody);
+        UTIL.clear(DISPLAY.student_tbody);
         for(const u of j) {
             add_user_to_display(u);
         }
@@ -134,7 +134,7 @@ that is, the stuff on the "Staff" and "Students" tabs.
 function make_user_edit_button_td(uname, edit_func) {
     const butt = document.createElement("button");
     butt.setAttribute("data-uname", uname);
-    label("edit", butt);
+    UTIL.label("edit", butt);
     butt.addEventListener("click", edit_func);
     const td = document.createElement("td");
     td.appendChild(butt);
@@ -154,8 +154,8 @@ function add_user_to_display(u) {
 
         const tr = document.createElement("tr");
         tr.setAttribute("data-uname", v.uname);
-        tr.appendChild(text_td(v.uname));
-        tr.appendChild(text_td(v.email));
+        tr.appendChild(UTIL.text_td(v.uname));
+        tr.appendChild(UTIL.text_td(v.email));
         tr.appendChild(make_user_edit_button_td(v.uname, edit_admin));
 
         DISPLAY.admin_tbody.appendChild(tr);
@@ -166,8 +166,8 @@ function add_user_to_display(u) {
 
         const tr = document.createElement("tr");
         tr.setAttribute("data-uname", v.uname);
-        tr.appendChild(text_td(v.uname));
-        tr.appendChild(text_td(v.email));
+        tr.appendChild(UTIL.text_td(v.uname));
+        tr.appendChild(UTIL.text_td(v.email));
         tr.appendChild(make_user_edit_button_td(v.uname, edit_boss));
 
         DISPLAY.boss_tbody.appendChild(tr);
@@ -178,9 +178,9 @@ function add_user_to_display(u) {
 
         const tr = document.createElement("tr");
         tr.setAttribute("data-uname", v.uname);
-        tr.appendChild(text_td(v.uname));
-        tr.appendChild(text_td(v.email));
-        tr.appendChild(text_td(u.Teacher.name));
+        tr.appendChild(UTIL.text_td(v.uname));
+        tr.appendChild(UTIL.text_td(v.email));
+        tr.appendChild(UTIL.text_td(u.Teacher.name));
         tr.appendChild(make_user_edit_button_td(v.uname, edit_teacher));
 
         DISPLAY.teacher_tbody.appendChild(tr);
@@ -192,11 +192,11 @@ function add_user_to_display(u) {
 
         const tr = document.createElement("tr");
         tr.setAttribute("data-uname", v.uname);
-        tr.appendChild(text_td(v.uname));
-        tr.appendChild(text_td(`${s.last}, ${s.rest}`));
-        tr.appendChild(text_td(s.teacher));
-        tr.appendChild(text_td(v.email));
-        tr.appendChild(text_td(s.parent));
+        tr.appendChild(UTIL.text_td(v.uname));
+        tr.appendChild(UTIL.text_td(`${s.last}, ${s.rest}`));
+        tr.appendChild(UTIL.text_td(s.teacher));
+        tr.appendChild(UTIL.text_td(v.email));
+        tr.appendChild(UTIL.text_td(s.parent));
         tr.appendChild(make_user_edit_button_td(v.uname, edit_student));
 
         DISPLAY.student_tbody.appendChild(tr);
@@ -487,12 +487,12 @@ document.getElementById("delete-teacher")
 function populate_teacher_selector(teacher_uname) {
     let sel = document.getElementById("alter-student-teacher");
     
-    recursive_clear(sel);
+    UTIL.clear(sel);
 
     for(const [uname, u] of DATA.users) {
         if(u.Teacher) {
             const opt = document.createElement("option");
-            set_text(opt, u.Teacher.name);
+            UTIL.set_text(opt, u.Teacher.name);
             opt.value = uname;
             sel.appendChild(opt);
         }
@@ -632,7 +632,7 @@ function upload_students_submit(evt) {
     const data = new FormData(form);
     const file = data.get("file");
 
-    get_file_as_text(file)
+    UTIL.get_file_as_text(file)
     .then((text) => {
         DISPLAY.student_upload.close();
         request_action("upload-students", text, `Uploading new students...`);
@@ -877,11 +877,11 @@ function toggle_chapter_display(evt) {
     let tr = document.querySelector(`tr[data-chapters="${sym}"]`);
     if(tr.style.display == "table-row") {
         tr.style.display = "none";
-        set_text(this, "\u2304");
+        UTIL.set_text(this, "\u2304");
         this.setAttribute("title", "show chapter list");
     } else {
         tr.style.display = "table-row";
-        set_text(this, "\u2303");
+        UTIL.set_text(this, "\u2303");
         this.setAttribute("title", "hide chapter list");
     }
 }
@@ -889,7 +889,7 @@ function toggle_chapter_display(evt) {
 function populate_course_chapters(c) {
     const sym = c.sym;
     const td_container = document.querySelector(`tr[data-chapters="${sym}"] > td`);
-    recursive_clear(td_container);
+    UTIL.clear(td_container);
 
     const tab = document.createElement("table");
     tab.id = `${sym}-chapters`;
@@ -897,11 +897,11 @@ function populate_course_chapters(c) {
 
     const thead = document.createElement("thead");
     const tr = document.createElement("tr");
-    tr.appendChild(text_th("#"));
-    tr.appendChild(text_th("title"));
-    tr.appendChild(text_th("subject"));
-    tr.appendChild(text_th("weight"));
-    tr.appendChild(text_th("actions"));
+    tr.appendChild(UTIL.text_th("#"));
+    tr.appendChild(UTIL.text_th("title"));
+    tr.appendChild(UTIL.text_th("subject"));
+    tr.appendChild(UTIL.text_th("weight"));
+    tr.appendChild(UTIL.text_th("actions"));
     thead.appendChild(tr);
     tab.appendChild(thead);
 
@@ -909,13 +909,13 @@ function populate_course_chapters(c) {
     c.chapters.forEach((ch, n) => {
         const tr = document.createElement("tr");
         tr.setAttribute("data-id", ch.id);
-        tr.appendChild(text_td(ch.seq));
-        tr.appendChild(text_td(ch.title));
-        tr.appendChild(text_td(ch.subject || ""));
-        tr.appendChild(text_td(ch.weight));
+        tr.appendChild(UTIL.text_td(ch.seq));
+        tr.appendChild(UTIL.text_td(ch.title));
+        tr.appendChild(UTIL.text_td(ch.subject || ""));
+        tr.appendChild(UTIL.text_td(ch.weight));
         const td = document.createElement("td");
         const ebutt = document.createElement("button");
-        label("edit", ebutt);
+        UTIL.label("edit", ebutt);
         ebutt.setAttribute("data-sym", sym);
         ebutt.setAttribute("data-index", n);
         ebutt.addEventListener("click", edit_chapter);
@@ -932,7 +932,7 @@ function populate_course_chapters(c) {
 
     const add_butt = document.createElement("button");
     add_butt.setAttribute("data-sym", sym);
-    label("+ append chapter", add_butt);
+    UTIL.label("+ append chapter", add_butt);
     add_butt.addEventListener("click", append_chapter)
     div.appendChild(add_butt);
 
@@ -952,7 +952,7 @@ function populate_course_chapters(c) {
     const app_butt = document.createElement("button");
     app_butt.setAttribute("data-form-name", form_name);
     app_butt.setAttribute("data-sym", sym);
-    label("+ append N Chapters", app_butt);
+    UTIL.label("+ append N Chapters", app_butt);
     app_butt.addEventListener("click", append_n_chapters);
     form.appendChild(app_butt);
 
@@ -963,30 +963,30 @@ function populate_course_chapters(c) {
 
 function populate_course_table_row(c) {
     const tr = DISPLAY.course_tbody.querySelector(`tr[data-sym="${c.sym}"]`);
-    recursive_clear(tr);
+    UTIL.clear(tr);
 
-    tr.appendChild(text_td(c.sym));
-    tr.appendChild(text_td(c.title));
-    tr.appendChild(text_td(c.level));
+    tr.appendChild(UTIL.text_td(c.sym));
+    tr.appendChild(UTIL.text_td(c.title));
+    tr.appendChild(UTIL.text_td(c.level));
     let td = document.createElement("td");
     const cite = document.createElement("cite");
-    set_text(cite, c.book);
+    UTIL.set_text(cite, c.book);
     td.appendChild(cite);
     tr.appendChild(td);
-    tr.appendChild(text_td(c.chapters.length));
+    tr.appendChild(UTIL.text_td(c.chapters.length));
 
     td = document.createElement("td");
     
     const expand = document.createElement("button");
     expand.setAttribute("data-sym", c.sym);
-    set_text(expand, "\u2304");
+    UTIL.set_text(expand, "\u2304");
     expand.setAttribute("title", "show chapter list");
     expand.addEventListener("click", toggle_chapter_display);
     td.appendChild(expand);
 
     const ebutt = document.createElement("button");
     ebutt.setAttribute("data-sym", c.sym);
-    label("edit", ebutt);
+    UTIL.label("edit", ebutt);
     ebutt.addEventListener("click", edit_course);
     td.appendChild(ebutt);
 
@@ -999,7 +999,7 @@ function populate_courses(r) {
         console.log("populate-courses response:", j);
 
         DATA.courses = new Map();
-        recursive_clear(DISPLAY.course_tbody);
+        UTIL.clear(DISPLAY.course_tbody);
         for(const c of j) {
             DATA.courses.set(c.sym, c);
 
@@ -1054,7 +1054,7 @@ PAGE LOAD SECTION
 
 console.log(DISPLAY);
 
-ensure_on_load(() => {
+UTIL.ensure_on_load(() => {
     request_action("populate-users", "", "Fetching User data...");
     request_action("populate-courses", "", "Fetching Course data...");
 });

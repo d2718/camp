@@ -1,7 +1,7 @@
 role,uname,email,name
-#a,root,root@nowhere.not,
-b,boss,boss@where.we.are,
-t,jenny,jenny@camelotacademy.org,Jenny Feaster
-t,irfan,irfan@camelotacademy.org,Irfan Azam
-t,berro,berro@camelotacademy.org,Michael Berro
-t,reed,reed@camelotacademy.org,Reed Kellner
+#a,root,root@nowhere.not,toot,
+b,boss,boss@where.we.are,bpwd,
+t,jenny,jenny@camelotacademy.org,jpwd,Jenny Feaster
+t,irfan,irfan@camelotacademy.org,ipwd,Irfan Azam
+t,berro,berro@camelotacademy.org,bpwd,Michael Berro
+t,reed,reed@camelotacademy.org,rpwd,Reed Kellner

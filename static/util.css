@@ -38,3 +38,23 @@ div#error > ul > li {
     font-family: monospace;
     white-space: pre-wrap;
 }
+
+div#old-browser {
+    display: none;
+    position: fixed;
+    width: 100vw; height: 100vh;
+    top: 0; left: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 12;
+}
+div#old-browser > div {
+    position: absolute;
+    display: inline-block;
+    min-width: 60ex;
+    width: 50%;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #dbc;
+}
+div#old-browser > div > * { margin: 1em; }
+div#old-browser > div > h2 { text-align: center; }

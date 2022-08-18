@@ -49,20 +49,22 @@ async fn handle_login(
         }
     };
 
-    if let User::Admin(a) = user {
-        return inter::admin::login(a, form, glob.clone()).await;
+    match user {
+        User::Admin(a) => inter::admin::login(a, form, glob.clone()).await,
+        User::Teacher(t) => inter::teacher::login(t, form, glob.clone()).await,
+        _ => {
+            let data = json!({
+                "error_message": "You attempted to log in, but logging in is currently unimplemented."
+            });
+
+            inter::serve_template(
+                StatusCode::NOT_IMPLEMENTED,
+                "login_error",
+                &data,
+                vec![]
+            )
+        },
     }
-
-    let data = json!({
-        "error_message": "You attempted to log in, but logging in is currently unimplemented."
-    });
-
-    inter::serve_template(
-        StatusCode::NOT_IMPLEMENTED,
-        "login_error",
-        &data,
-        vec![]
-    )
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -90,6 +92,7 @@ async fn main() {
     let addr = glob.read().await.addr.clone();
     let app = Router::new()
         .route("/admin", post(inter::admin::api))
+        .route("/teacher", post(inter::teacher::api))
         .layer(middleware::from_fn(inter::key_authenticate))
         .layer(middleware::from_fn(inter::request_identity))
         .route("/login", post(handle_login))
