@@ -190,7 +190,7 @@ async fn main() -> Result<(), UnifiedError> {
     glob.refresh_courses().await?;
     glob.refresh_users().await?;
     for (u, pwd) in users.iter().zip(pwds.iter()) {
-        glob.update_password(u.uname(), pwd.as_str()).awaitz?;
+        glob.update_password(u.uname(), pwd.as_str()).await?;
     }
 
     {

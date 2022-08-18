@@ -22,13 +22,6 @@ const UTIL = {
         }
     },
 
-    clear: function(elt) {
-        while(elt.firstChild) {
-            recursive_clear(elt.lastChild);
-            elt.removeChild(elt.lastChild);
-        }
-    },
-
     get_file_as_text: async function (file) {
         const reader = new FileReader(file);
         
@@ -53,7 +46,7 @@ const UTIL = {
     },
 
     date2iso: function (date) {
-        return date.toISOString().match(CAL.date_re)[0];
+        return date.toISOString().match(UTIL.date_re)[0];
     },
 
     text_td: function(text) {
@@ -94,6 +87,17 @@ const UTIL = {
 UTIL.set_text = function(elt, text) {
     UTIL.clear(elt);
     elt.appendChild(document.createTextNode(text));
+}
+
+{
+    function f(elt) {
+        while(elt.firstChild) {
+            f(elt.lastChild);
+            elt.removeChild(elt.lastChild);
+        }
+    }
+
+    UTIL.clear = f;
 }
 
 async function are_you_sure(question) {
@@ -154,7 +158,7 @@ RQ.add_err = function(err) {
 RQ.error_dismiss.addEventListener("click",
     function() {
         RQ.error_div.style.display = "none";
-        recursive_clear(RQ.error_list);
+        UTIL.clear(RQ.error_list);
     }
 );
 

@@ -39,6 +39,20 @@ div#error > ul > li {
     white-space: pre-wrap;
 }
 
+dialog#are-you-sure {
+    position: fixed;
+    top: 50vh; left: 50vw;
+    transform: translate(-50%, -50%);
+    background-color: #adf;
+    border: 1ex solid #268;
+    padding: 1em;
+}
+dialog#are-you-sure > form {
+    display: flex;
+    justify-content: space-evenly;
+}
+p#are-you-sure-message { margin-bottom: 1em; }
+
 div#old-browser {
     display: none;
     position: fixed;

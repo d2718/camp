@@ -1,5 +1,6 @@
 table.calendar-month {
     display: inline-block;
+    border-collapse: collapse;
     user-select: none;
 }
 

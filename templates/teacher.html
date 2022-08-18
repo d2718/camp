@@ -4,6 +4,7 @@
         <meta charset="utf-8">
         <title>CAMP | {{name}} Teacher View</title>
         <link rel="stylesheet" href="/static/teacher.css">
+        <link rel="stylesheet" href="/static/dialog.css">
         <link rel="stylesheet" href="/static/util.css">
         <link rel="icon" type="image/png" href="/static/camp_icon.png">
         <script>
@@ -16,7 +17,7 @@ const AUTH = {
     </head>
     <body>
         <div id="content-container">
-            <h1>Teacher {{uname}} ({{name}})</h1>
+            <h1>Teacher <kbd>{{uname}}</kbd> ({{name}})</h1>
             <div id="cals"></div>
         </div>
 
@@ -34,6 +35,56 @@ const AUTH = {
                 <label><img src="/static/dismiss.svg"></label>
             </button>
         </div>
+
+        <dialog id="complete-goal" class="edit">
+            <h1>Goal Details</h1>
+            <p id="complete-goal-meta"></p>
+            <form name="complete-goal" method="dialog">
+                <label for="complete-goal-done">done</label>
+                <input type="date" name="done" id="complete-goal-done">
+                <label for="complete-goal-tries">tries</label>
+                <input type="number" name="tries" id="complete-goal-tries">
+                <label for="complete-goal-score">score</label>
+                <input name="score" id="complete-goal-score">
+                <button id="complete-goal-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="complete-goal-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+
+                <input type="hidden" name="id">
+            </form>
+        </dialog>
+
+        <dialog id="edit-goal" class="edit">
+            <h1>Goal Details</h1>
+            <p id="edit-goal-meta"></p>
+            <form name="edit-goal" method="dialog">
+                <label for="edit-goal-course">course</label>
+                <!-- Need <OPTIONS> for this to be dynamically set. -->
+                <input name="course" id="edit-goal-course" required>
+                <label for="edit-goal-seq">chapter</label>
+                <!-- SET max/min dynamically based on coruse. -->
+                <input type="number" name="seq" id="edit-goal-seq" required>
+                <label for="edit-goal-due">due</label>
+                <input type="date" name="due" id="edit-goal-due">
+                <button id="edit-goal-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="edit-goal-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+
+                <input type="hidden" name="id">
+            </form>
+            <hr>
+            <div class="center">
+                <button id="delete-goal">
+                    <label>delete this Goal</label>
+                </button>
+            </div>
+        </dialog>
 
         <dialog id="are-you-sure">
             <h1>&iquest;Are you sure?</h1>

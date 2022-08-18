@@ -1,6 +1,7 @@
 /*
 Oh, man, we're implementing a calendar.
 */
+"use strict";
 
 const CAL = {
     dates: new Set(),
@@ -299,7 +300,7 @@ CAL.year_selector.addEventListener("change", function(evt) {
     CAL.populate_year(CAL.target_div, Number(this.value));
     CAL.repaint_dates();
 })
-for(input of CAL.date_form.elements) {
+for(const input of CAL.date_form.elements) {
     input.addEventListener("change", CAL.update_date);
 }
 

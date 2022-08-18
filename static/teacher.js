@@ -11,6 +11,7 @@ const DATA = {
 };
 const DISPLAY = {
     calbox: document.getElementById("cals"),
+    goal_edit: document.getElementById("edit-goal"),
 }
 
 const NOW = new Date();
@@ -38,7 +39,27 @@ function ratio2pct(num, denom) {
     return `${pct}%`;
 }
 
-const PCAL_COLS = ["course", "chapter", "due", "done", "tries", "score"];
+function interpret_score(str) {
+    const [n, d] = str.split("/").map(x => Number(x));
+    if(!n) {
+        return null;
+    } else if(d) {
+        return n / d;
+    } else if(n > 2) {
+        return n / 100;
+    } else {
+        return n;
+    }
+}
+function score2pct(str) {
+    const p = interpret_score(str);
+    if(p) {
+        const pct = (100 * p).round();
+        return `${pct}%`;
+    }
+}
+
+const PCAL_COLS = ["course", "chapter", "due", "done", "tries", "score", "edit"];
 
 function row_from_goal(g) {
     const crs = DATA.courses.get(g.sym);
@@ -72,12 +93,40 @@ function row_from_goal(g) {
         }
     }
 
-    tr.appendChild(UTIL.text_td(crs.title));
-    tr.appendChild(UTIL.text_td(chp.title));
-    tr.appendChild(UTIL.text_td(chp.due || ""));
-    tr.appendChild(UTIL.text_td(chp.done || ""));
-    tr.appendChild(UTIL.text_td(chp.tries || ""));
-    tr.appendChild(UTIL.text_td(chp.score || ""));
+    const ctd = UTIL.text_td(crs.title);
+    ctd.setAttribute("title", crs.book);
+    tr.appendChild(ctd);
+    const chtd = UTIL.text_td(chp.title)
+    if(chp.subject) { chtd.setAttribute("title", chp.subject); }
+    tr.appendChild(chtd);
+    const duetd = UTIL.text_td(g.due || "")
+    duetd.setAttribute("class", "due");
+    tr.appendChild(duetd);
+    const donetd = UTIL.text_td(g.done || "");
+    tr.appendChild(donetd);
+    const triestd = UTIL.text_td(g.tries || "")
+    triestd.setAttribute("class", "tries");
+    tr.appendChild(triestd);
+    const scoretd = document.createElement("td");
+    if(g.score) {
+        UTIL.set_text(`${g.score} (${score2pct(g.score)})`);
+    }
+    scoretd.setAttribute("class", "score");
+    tr.appendChild(scoretd);
+
+    const etd = document.createElement("td");
+    etd.setAttribute("class", "edit");
+    const complete = document.createElement("button");
+    complete.setAttribute("data-id", g.id);
+    complete.setAttribute("title", "complete goal");
+    UTIL.label("\u2713", complete);
+    etd.appendChild(complete);
+    const edit = document.createElement("button");
+    edit.setAttribute("data-id", g.id);
+    edit.setAttribute("title", "edit goal");
+    UTIL.label("\u270e", edit);
+    etd.appendChild(edit);
+    tr.appendChild(etd);
 
     return tr;
 }
@@ -130,9 +179,9 @@ function make_calendar_table(cal) {
     UTIL.set_text(name, `${cal.last}, ${cal.rest}`);
     names.appendChild(name);
     names.appendChild(document.createElement("br"));
-    name = document.createElement("span");
+    name = document.createElement("kbd");
     name.setAttribute("class", "uname");
-    UTIL.set_text(name, `(${cal.uname})`);
+    UTIL.set_text(name, cal.uname);
     names.appendChild(name);
     summary.appendChild(names);
 
@@ -146,6 +195,28 @@ function make_calendar_table(cal) {
     const num_txt = `done ${n_done} / ${n_due} due (${lead_pct})`;
     UTIL.set_text(numbers, num_txt);
     summary.appendChild(numbers);
+
+    const more_tr = document.createElement("tr");
+    const more_td = document.createElement("td");
+    more_tr.appendChild(more_td);
+    more_td.setAttribute("colspan", PCAL_COLS.length);
+    const more_div = document.createElement("div");
+    more_div.setAttribute("class", "fullwidth");
+    more_td.appendChild(more_div);
+
+    const expbutt = document.createElement("button");
+    expbutt.setAttribute("data-uname", cal.uname);
+    UTIL.label("+ more +", expbutt);
+    more_div.appendChild(expbutt);
+    const addbutt = document.createElement("button");
+    addbutt.setAttribute("data-uname", cal.uname);
+    UTIL.label("add goal \u229e", addbutt);
+    more_div.appendChild(addbutt);
+
+
+
+    tbody.appendChild(more_tr);
+
 
     return tab;
 }
@@ -256,3 +327,17 @@ function request_action(action, body, description) {
 UTIL.ensure_on_load(() => {
     request_action("populate-courses", "", "Fetching Course data.")
 });
+
+/*
+
+
+Now we get to the editing.
+
+
+
+
+function edit_goal(evt) {
+    const 
+}
+
+*/
