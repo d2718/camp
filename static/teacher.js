@@ -268,12 +268,31 @@ function populate_goals(r) {
         for(const p of j) {
             DATA.paces.set(p.uname, p);
             for(const g of p.goals) {
+                g.uname = p.uname;
                 DATA.goals.set(g.id, g);
             }
 
             const tab = make_calendar_table(p);
             DISPLAY.calbox.appendChild(tab);
         }
+    })
+    .catch(log_numbered_error);
+}
+
+function replace_pace(r) {
+    r.json()
+    .then(j => {
+        console.log("update-pace response:", j);
+
+        DATA.paces.set(j);
+        for(const g of j.goals) {
+            g.uname = j.uname;
+            DATA.goals.set(g.id, g);
+        }
+
+        const tab = make_calendar_table(j);
+        const current_tab = document.querySelector(`table.pace[data-uname="${j.uname}"]`);
+        current_tab.replaceWith(tab);
     })
     .catch(log_numbered_error);
 }
@@ -307,6 +326,8 @@ function field_response(r) {
         populate_courses(r);
     } else if(action == "populate-goals") {
         populate_goals(r);
+    } else if(action = "update-pace") {
+        replace_pace(r);
     } else {
         const e_n = next_err();
         const err_txt = `Unrecognized x-camp-action header: "${action}". (See console error #${e_n}.)`;
@@ -460,7 +481,7 @@ function edit_goal_submit(evt) {
     g["inc"] = form.elements["incomplete"].checked;
     g["due"] = form.elements["due"].value || null;
 
-    DISPLAY.goal_edit.closest();
+    DISPLAY.goal_edit.close();
     if(form.elements["id"].value) {
         request_action("update-goal", g, `Updating Goal ${id}`);
     } else {

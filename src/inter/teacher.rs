@@ -17,10 +17,20 @@ use crate::{
     DATE_FMT,
     config::Glob,
     course::{Chapter, Course},
-    pace::{BookCh, Pace, Source},
+    pace::{BookCh, Goal, Pace, maybe_parse_score_str, Source},
     user::*,
 };
 use super::*;
+
+fn maybe_parse_date(date_opt: Option<&str>) -> Result<Option<Date>, String> {
+    match date_opt {
+        Some(date_str) => match Date::parse(date_str, DATE_FMT) {
+            Ok(d) => Ok(Some(d)),
+            Err(e) => Err(format!("Unable to parse {:?} as Date: {}", date_str, &e)),
+        },
+        None => Ok(None),
+    }
+}
 
 pub async fn login(
     t: Teacher,
@@ -77,7 +87,7 @@ pub async fn login(
 
 pub async fn api(
     headers: HeaderMap,
-    _body: Option<String>,
+    body: Option<String>,
     Extension(glob): Extension<Arc<RwLock<Glob>>>
 ) -> Response {
 
@@ -123,6 +133,8 @@ pub async fn api(
     match action {
         "populate-courses" => populate_courses(glob.clone()).await,
         "populate-goals" => populate_goals(&headers, glob.clone()).await,
+        "add-goal" => insert_goal(body, glob.clone()).await,
+        "update-goal" => update_goal(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognized x-camp-action value.", &x)
         ),
@@ -236,6 +248,36 @@ struct GoalData<'a> {
     score: Option<&'a str>,
 }
 
+impl<'a> GoalData<'a> {
+    fn into_goal(self) -> Result<Goal, String> {
+        let source = BookCh {
+            sym: self.sym.to_owned(),
+            seq: self.seq,
+            // doesn't matter on insertion
+            level: 0.0,
+        };
+
+        let _ = maybe_parse_score_str(self.score)?;
+
+        let g = Goal {
+            id: self.id,
+            uname: self.uname.to_owned(),
+            source: Source::Book(source),
+            review: self.rev,
+            incomplete: self.inc,
+            due: maybe_parse_date(self.due.as_deref())
+                .map_err(|e| format!("Bad due date: {}", &e))?,
+            done: maybe_parse_date(self.done.as_deref())
+                .map_err(|e| format!("Bad done date: {}", &e))?,
+            tries: self.tries,
+            weight: self.weight,
+            score: self.score.map(|s| s.to_owned()),
+        };
+
+        Ok(g)
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 struct PaceData<'a> {
     uname: &'a str,
@@ -337,9 +379,17 @@ async fn populate_goals(headers: &HeaderMap, glob: Arc<RwLock<Glob>>) -> Respons
     ).into_response()
 }
 
-async fn update_pace(pcal: &Pace) -> Response {
-    let cal = match PaceData::from_pace(pcal) {
-        Ok(cal) => cal,
+async fn update_pace(uname: &str, glob: Arc<RwLock<Glob>>) -> Response {
+    let p = match glob.read().await.get_pace_by_student(uname).await {
+        Ok(p) => p,
+        Err(e) => {
+            log::error!("Error getting Pace for student {:?}: {}", uname, &e);
+            return text_500(Some(format!("Error retrieving updated Pace from database: {}", &e)));
+        }
+    };
+
+    let pdata = match PaceData::from_pace(&p) {
+        Ok(pdata) => pdata,
         Err(e) => { return text_500(Some(format!(
             "Unable to serialize response: {}", &e
         ))); },
@@ -351,6 +401,72 @@ async fn update_pace(pcal: &Pace) -> Response {
             HeaderName::from_static("x-camp-action"),
             HeaderValue::from_static("update-pace")
         )],
-        Json(cal)
+        Json(pdata)
     ).into_response()
+}
+
+async fn insert_goal(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request needs application/json body with Goal details.".to_owned()
+        ); },
+    };
+
+    let gdata: GoalData = match serde_json::from_str(&body) {
+        Ok(gdata) => gdata,
+        Err(e) => {
+            log::error!("Error deserialzing {:?} as GoalData: {}", &body, &e);
+            return text_500(Some(
+                "Unable to deserializse as GoalData.".to_owned()
+            ));
+        }
+    };
+
+    let g = match gdata.into_goal() {
+        Ok(g) => g,
+        Err(e) => { return text_500(Some(format!(
+                "Error reading Goal data: {}", &e
+        ))); },
+    };
+
+    if let Err(e) = glob.read().await.data().read().await.insert_one_goal(&g).await {
+        log::error!("Error inserting Goal {:?} into database: {}", &g, &e);
+        return text_500(Some(format!("Error inserting Goal into database: {}", &e)));
+    }
+
+    update_pace(&g.uname, glob).await
+}
+
+async fn update_goal(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request needs application/json body with Goal details.".to_owned()
+        ); },
+    };
+
+    let gdata: GoalData = match serde_json::from_str(&body) {
+        Ok(gdata) => gdata,
+        Err(e) => {
+            log::error!("Error deserialzing {:?} as GoalData: {}", &body, &e);
+            return text_500(Some(
+                "Unable to deserializse as GoalData.".to_owned()
+            ));
+        }
+    };
+
+    let g = match gdata.into_goal() {
+        Ok(g) => g,
+        Err(e) => { return text_500(Some(format!(
+                "Error reading Goal data: {}", &e
+        ))); },
+    };
+
+    if let Err(e) = glob.read().await.data().read().await.update_goal(&g).await {
+        log::error!("Error inserting Goal {:?} into database: {}", &g, &e);
+        return text_500(Some(format!("Error inserting Goal into database: {}", &e)));
+    }
+
+    update_pace(&g.uname, glob).await
 }

@@ -7,6 +7,7 @@ use std::{
     io::Read,
 };
 
+use smallvec::SmallVec;
 use time::{Date, Month};
 
 use crate::{
@@ -14,6 +15,45 @@ use crate::{
     course::Course,
     user::{Student, Teacher, User},
 };
+
+pub fn parse_score_str(score_str: &str) -> Result<f32, String> {
+    let chunks: SmallVec<[f32; 2]> = score_str.split('/')
+        .take(2)
+        .map(|s| s.trim().parse::<f32>())
+        .filter(|res| res.is_ok())
+        .map(|ok| ok.unwrap())
+        .collect();
+    
+    match chunks[..] {
+        [n, d] => {
+            if d.abs() < 0.001 {
+                Err("Danger of division by zero.".to_string())
+            } else {
+                Ok(n / d)
+            }
+        },
+        [x] => {
+            if x.abs() > 2.0 {
+                Ok(x / 100.0)
+            } else {
+                Ok(x)
+            }
+        },
+        _ => {
+            Err(format!("Unable to parse: {:?} as score.", score_str))
+        },
+    }
+}
+
+pub fn maybe_parse_score_str(score_str: Option<&str>) -> Result<Option<f32>, String> {
+    match score_str {
+        Some(score_str) => match parse_score_str(score_str) {
+            Ok(x) => Ok(Some(x)),
+            Err(e) => Err(e),
+        },
+        None => Ok(None),
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct BookCh {
