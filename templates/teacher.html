@@ -63,12 +63,18 @@ const AUTH = {
             <form name="edit-goal" method="dialog">
                 <label for="edit-goal-course">course</label>
                 <!-- Need <OPTIONS> for this to be dynamically set. -->
-                <input name="course" id="edit-goal-course" required>
+                <input name="course" id="edit-goal-course"
+                       list="course-names" required>
                 <label for="edit-goal-seq">chapter</label>
                 <!-- SET max/min dynamically based on coruse. -->
-                <input type="number" name="seq" id="edit-goal-seq" required>
+                <input type="number" name="seq" id="edit-goal-seq"
+                       list="course-seqs" required>
                 <label for="edit-goal-due">due</label>
                 <input type="date" name="due" id="edit-goal-due">
+                <label for="edit-goal-review">review</label>
+                <input type="checkbox" name="review" id="edit-goal-review">
+                <label for="edit-goal-incomplete">incomplete</label>
+                <input type="checkbox" name="incomplete" id="edit-goal-incomplete">
                 <button id="edit-goal-cancel">
                     <label class="cancel">cancel</label>
                 </button>
@@ -117,6 +123,9 @@ const AUTH = {
                 </ul>
             </div>
         </div>
+
+        <datalist id="course-names"></datalist>
+        <datalist id="course-seqs"></datalist>
 
         <script src="/static/util.js"></script>
     </body>

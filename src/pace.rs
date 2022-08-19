@@ -639,4 +639,32 @@ mod tests {
 
         teardown_env(g).await.unwrap();
     }
+
+/*     #[tokio::test]
+    #[serial]
+    async fn make_pace_serialized() {
+        use std::io::Write;
+        use serde_json::to_writer_pretty;
+
+        let glob = init_env().await.unwrap();
+        let paces = Pace::from_csv(
+            File::open(GOALS_FILE).unwrap(),
+            &glob
+        ).unwrap();
+
+        let p = paces.pop().unwrap();
+
+        println!("Debug:\n{:#?}\n", &p);
+
+        let mut buff: Vec<u8> = Vec::new();
+        buff.extend_from_slice(b"serde_json:\n");
+        to_writer_pretty(&mut buff, &p).unwrap();
+        buff.push(b'\n');
+        let buff = String::from_utf8(buff).unwrap();
+
+        println!("{}", &buff);
+
+        teardown_env(glob).await.unwrap();
+
+    } */
 }

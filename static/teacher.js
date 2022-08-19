@@ -8,11 +8,14 @@ const DATA = {
     courses: new Map(),
     chapters: new Map(),
     paces: new Map(),
+    goals: new Map(),
 };
 const DISPLAY = {
     calbox: document.getElementById("cals"),
     goal_edit: document.getElementById("edit-goal"),
-}
+    course_input: document.getElementById("edit-goal-course"),
+    seq_input: document.getElementById("edit-goal-seq"),
+};
 
 const NOW = new Date();
 
@@ -125,6 +128,7 @@ function row_from_goal(g) {
     edit.setAttribute("data-id", g.id);
     edit.setAttribute("title", "edit goal");
     UTIL.label("\u270e", edit);
+    edit.addEventListener("click", edit_goal);
     etd.appendChild(edit);
     tr.appendChild(etd);
 
@@ -211,12 +215,10 @@ function make_calendar_table(cal) {
     const addbutt = document.createElement("button");
     addbutt.setAttribute("data-uname", cal.uname);
     UTIL.label("add goal \u229e", addbutt);
+    addbutt.addEventListener("click", edit_goal);
     more_div.appendChild(addbutt);
 
-
-
     tbody.appendChild(more_tr);
-
 
     return tab;
 }
@@ -228,6 +230,9 @@ function populate_courses(r) {
 
         DATA.courses = new Map();
         DATA.chapters = new Map();
+        const list = document.getElementById("course-names");
+        UTIL.clear(list);
+
         for(const crs of j) {
             let chaps = new Array();
             for(const chp of crs.chapters) {
@@ -236,6 +241,14 @@ function populate_courses(r) {
             }
             crs.chapters = chaps;
             DATA.courses.set(crs.sym, crs);
+
+            let book_text = "";
+            if(crs.book) { book_text = ` (${crs.book})`; }
+            const option_text = `${crs.sym}: ${crs.title}${book_text}`;
+            const opt = document.createElement("option");
+            opt.value = crs.sym;
+            UTIL.set_text(opt, option_text);
+            list.appendChild(opt);
         }
 
         request_action("populate-goals", "", "Populating pace calendars.")
@@ -249,10 +262,14 @@ function populate_goals(r) {
         console.log("populate-goals response:", j);
 
         DATA.paces = new Map();
+        DATA.goals = new Map();
         UTIL.clear(DISPLAY.calbox);
 
         for(const p of j) {
             DATA.paces.set(p.uname, p);
+            for(const g of p.goals) {
+                DATA.goals.set(g.id, g);
+            }
 
             const tab = make_calendar_table(p);
             DISPLAY.calbox.appendChild(tab);
@@ -334,10 +351,128 @@ UTIL.ensure_on_load(() => {
 Now we get to the editing.
 
 
+*/
 
+function populate_seq_list(evt) {
+    const list = document.getElementById("course-seqs");
+    const sym = document.forms["edit-goal"].elements["course"].value;
+    const crs = DATA.courses.get(sym);
 
-function edit_goal(evt) {
-    const 
+    UTIL.clear(list);
+    const seqs = crs.chapters.filter(x => Boolean(x))
+        .map(id => DATA.chapters.get(id).seq);
+    for(const n in seqs) {
+        const opt = document.createElement("option");
+        opt.value = n;
+        list.appendChild(opt);
+    }
+    console.log(seqs);
+
+    const min = Math.min.apply(null, seqs);
+    const max = Math.max.apply(null, seqs);
+
+    DISPLAY.seq_input.setAttribute("min", min);
+    DISPLAY.seq_input.setAttribute("max", max);
+
+    let book_text = "";
+    if (crs.book) { book_text = ` (${crs.book})`; }
+    const course_text = `${crs.sym}: ${crs.title}${book_text}`;
+    DISPLAY.course_input.setAttribute("title", course_text);
 }
 
-*/
+document.getElementById("edit-goal-course")
+    .addEventListener("change", populate_seq_list);
+
+function edit_goal(evt) {
+    const form = document.forms["edit-goal"];
+    const del = document.getElementById("delete-goal");
+    let id = this.getAttribute("data-id");
+    const confirm = document.getElementById("edit-goal-confirm");
+
+    if(id) {
+        id = Number(id);
+        const g = DATA.goals.get(id);
+        form.elements["id"].value = id;
+        form.elements["course"].value = g.sym;
+        form.elements["seq"].value = g.seq;
+        form.elements["due"].value = g.due;
+        form.elements["review"].checked = g.rev;
+        form.elements["incomplete"].checked = g.inc;
+        del.disabled = false;
+        populate_seq_list();
+        confirm.removeAttribute("data-uname");
+    } else {
+        for(const ipt of form.elements) {
+            if(ipt.value) { ipt.value = null; }
+            if(ipt.checked) { ipt.checked = false; }
+        }
+        del.disabled = true;
+        const uname = this.getAttribute("data-uname");
+        confirm.setAttribute("data-uname", uname);
+    }
+
+    DISPLAY.goal_edit.showModal();
+}
+
+
+
+function edit_goal_submit(evt) {
+    const form = document.forms["edit-goal"];
+    const uname = this.getAttribute("data-uname") || "";
+    const id = Number(form.elements["id"].value) || 0;
+    const sym = form.elements["course"].value?.trim() || "";
+    const course = DATA.courses.get(sym);
+    const seq = Number(form.elements["seq"].value) || 0;
+    const chapt = course.chapters[seq];
+    if(sym == "") {
+        RQ,add_err("You must select a valid course.");
+        return;
+    } else if(!course) {
+        RQ.add_err(`"${sym} is not a valid course symbol.`);
+        return;
+    }
+    if(!chapt) {
+        const err = `You must select a valid chapter number for course "${sym}": ${course.title} (${course.book}).`
+        RQ.add_err(err);
+        return;
+    }
+
+    // Pre-fill default values for a new goal.
+    let g = {
+        "uname": uname,
+        "done": null,
+        "tries": null,
+        "weight": 0,
+        "score": null,
+    };
+
+    // If this is an extant goal, pre-fill all the extant data.
+    if(form.elements["id"].value) {
+        for(const [k, v] of Object.entries(DATA.goals.get(id))) {
+            g[k] = v;
+        }
+    }
+
+    g["id"] = id;
+    g["sym"] = sym;
+    g["seq"] = seq;
+    g["rev"] = form.elements["review"].checked;
+    g["inc"] = form.elements["incomplete"].checked;
+    g["due"] = form.elements["due"].value || null;
+
+    DISPLAY.goal_edit.closest();
+    if(form.elements["id"].value) {
+        request_action("update-goal", g, `Updating Goal ${id}`);
+    } else {
+        request_action("add-goal", g, `Adding new Goal: ${sym}, ${seq} for ${uname}`);
+    }
+    
+}
+
+document.getElementById("edit-goal-cancel")
+    .addEventListener("click", (evt) => {
+        evt.preventDefault(),
+        DISPLAY.goal_edit.closest();
+    });
+document.getElementById("edit-goal-confirm")
+    .addEventListener("click", edit_goal_submit);

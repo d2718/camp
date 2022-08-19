@@ -125,6 +125,69 @@ impl Store {
         Ok(n_inserted as usize)
     }
 
+    pub async fn insert_one_goal(
+        &self,
+        g: &Goal
+    ) -> Result<(), DbError>{
+        log::trace!("Store::insert_one_goal( {:?} ) called.", g);
+        
+        let src = match &g.source {
+            Source::Book(bch) => bch,
+            _ => { return Err(DbError(
+                "Custom sources not yet supported.".to_owned()
+            )); },
+        };
+
+        let client = self.connect().await?;
+
+        client.execute(
+            "INSERT INTO goals (
+                uname, sym, seq, review, incomplete,
+                due, done
+            )
+            VALUES (
+                $1, $2, $3, $4, $5,
+                $6, $7
+            )",
+            &[
+                &g.uname, &src.sym, &src.seq, &g.review, &g.incomplete,
+                &g.due, &g.done
+            ]
+        ).await?;
+
+        Ok(())
+    }
+
+    pub async fn update_goal(
+        &self,
+        g: &Goal
+    ) -> Result<(), DbError> {
+        log::trace!("Store_update_goal( {:?} ) called.", g);
+
+        let src = match &g.source {
+            Source::Book(bch) => bch,
+            _ => { return Err(DbError(
+                "Custom sources not yet supported.".to_owned()
+            )); },
+        };
+
+        let client = self.connect().await?;
+
+        client.execute(
+            "UPDATE goals SET
+                sym = $1, seq = $2, review = $3, incomplete = $4,
+                due = $5, done = $6, tries = $7, score = $8
+            WHERE id = $9",
+            &[
+                &src.sym, &src.seq, &g.review, &g.incomplete,
+                &g.due, &g.done, &g.tries, &g.score,
+                &g.id
+            ]
+        ).await?;
+
+        Ok(())
+    }
+
     pub async fn get_goals_by_student(
         &self,
         uname: &str

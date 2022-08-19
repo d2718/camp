@@ -223,6 +223,8 @@ async fn populate_courses(glob: Arc<RwLock<Glob>>) -> Response {
 #[derive(Debug, Deserialize, Serialize)]
 struct GoalData<'a> {
     id: i64,
+    #[serde(skip_serializing)]
+    uname: &'a str,
     sym: &'a str,
     seq: i16,
     rev: bool,
@@ -266,6 +268,7 @@ impl<'a> PaceData<'a> {
 
             let gdat = GoalData {
                 id: g.id,
+                uname: "",
                 sym: &src.sym,
                 seq: src.seq,
                 rev: g.review,
@@ -331,5 +334,23 @@ async fn populate_goals(headers: &HeaderMap, glob: Arc<RwLock<Glob>>) -> Respons
             HeaderValue::from_static("populate-goals")
         )],
         Json(pace_data)
+    ).into_response()
+}
+
+async fn update_pace(pcal: &Pace) -> Response {
+    let cal = match PaceData::from_pace(pcal) {
+        Ok(cal) => cal,
+        Err(e) => { return text_500(Some(format!(
+            "Unable to serialize response: {}", &e
+        ))); },
+    };
+
+    (
+        StatusCode::OK,
+        [(
+            HeaderName::from_static("x-camp-action"),
+            HeaderValue::from_static("update-pace")
+        )],
+        Json(cal)
     ).into_response()
 }
