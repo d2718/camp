@@ -16,12 +16,29 @@ const AUTH = {
         <script src="/static/teacher.js" defer></script>
     </head>
     <body>
-        <div id="content-container">
+        <d id="content-container">
             <h1>Teacher <kbd>{{uname}}</kbd> ({{name}})</h1>
             <div id="cals"></div>
         </div>
 
-        <div id="course-info"></div>
+        <div id="course-info-show" title="show available courses">
+            <img src="/static/up_chevron.svg">
+        </div>
+        <div id="course-info-hide" title="hide available courses">
+            <img src="/static/down_chevron.svg">
+        </div>
+
+        <div id="course-info">
+            <table id="genl-courses">
+                <thead><tr><th colspan="2">General Math</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <table id="hs-courses">
+                <thead><tr><th colspan="2">High School Math</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <div id="course-table-spacer"></div>
+        </div>
 
         <div id="progress">
             <img src="/static/blue_waiting.gif">
@@ -90,6 +107,27 @@ const AUTH = {
                     <label>delete this Goal</label>
                 </button>
             </div>
+        </dialog>
+
+        <dialog id="complete-goal" class="edit">
+            <h1>Completion Data</h1>
+            <p id="complete-goal-meta"></p>
+            <form name="complete-goal" method="dialog">
+                <label for="complete-goal-done">completed</label>
+                <input type="date" name="done" id="complete-goal-done">
+                <label for="complete-goal-tries">tries</label>
+                <input type="number" name="tries" id="complete-goal-tries">
+                <label for="complete-goal-score">score</label>
+                <input name="score" id="complete-goal-score">
+                <button id="complete-goal-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="complete-goal-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+
+                <input type="hidden" name="id">
+            </form>
         </dialog>
 
         <dialog id="are-you-sure">

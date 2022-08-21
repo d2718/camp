@@ -188,6 +188,23 @@ impl Store {
         Ok(())
     }
 
+    pub async fn delete_goal(
+        &self,
+        id: i64
+    ) -> Result<String, DbError> {
+        log::trace!("Store::delete_goal( {} ) called.", &id);
+
+        let client = self.connect().await?;
+
+        let row = client.query_one(
+            "DELETE FROM goals WHERE id = $1 RETURNING uname", &[&id]
+        ).await?;
+
+        let uname: String = row.try_get("uname")?;
+
+        Ok(uname)
+    }
+
     pub async fn get_goals_by_student(
         &self,
         uname: &str

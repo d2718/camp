@@ -11,10 +11,17 @@ const DATA = {
     goals: new Map(),
 };
 const DISPLAY = {
+    course_list_div: document.getElementById("course-info"),
+    course_list_hide: document.getElementById("course-info-hide"),
+    course_list_genl: document.querySelector("table#genl-courses > tbody"),
+    course_list_hs: document.querySelector("table#hs-courses > tbody"),
     calbox: document.getElementById("cals"),
     goal_edit: document.getElementById("edit-goal"),
+    goal_edit_meta: document.getElementById("edit-goal-meta"),
     course_input: document.getElementById("edit-goal-course"),
     seq_input: document.getElementById("edit-goal-seq"),
+    goal_complete: document.getElementById("complete-goal"),
+    goal_complete_meta: document.getElementById("complete-goal-meta"),
 };
 
 const NOW = new Date();
@@ -57,7 +64,7 @@ function interpret_score(str) {
 function score2pct(str) {
     const p = interpret_score(str);
     if(p) {
-        const pct = (100 * p).round();
+        const pct = Math.round(100 * p);
         return `${pct}%`;
     }
 }
@@ -72,8 +79,8 @@ function row_from_goal(g) {
     tr.setAttribute("data-id", g.id);
     let due = null;
     let done = null;
-    if(chp.due) { due = UTIL.iso2date(chp.due); }
-    if(chp.done) { done = UTIL.iso2date(chp.done); }
+    if(g.due) { due = UTIL.iso2date(g.due); }
+    if(g.done) { done = UTIL.iso2date(g.done); }
     if(due) {
         if(done) {
             if(due < done) {
@@ -87,6 +94,9 @@ function row_from_goal(g) {
             } else {
                 tr.setAttribute("class", "yet");
             }
+            // If it's not done, and also "Incomplete", it should be
+            // highlighted with badness.
+            if(g.inc) { tr.classList.add("bad"); }
         }
     } else {
         if(done) {
@@ -99,20 +109,26 @@ function row_from_goal(g) {
     const ctd = UTIL.text_td(crs.title);
     ctd.setAttribute("title", crs.book);
     tr.appendChild(ctd);
-    const chtd = UTIL.text_td(chp.title)
+
+    let chtext = chp.title;
+    if(g.rev) { chtext = chtext + " R"; }
+    if(g.inc) { chtext = chtext + " I"; }
+    const chtd = UTIL.text_td(chtext)
     if(chp.subject) { chtd.setAttribute("title", chp.subject); }
     tr.appendChild(chtd);
+
     const duetd = UTIL.text_td(g.due || "")
     duetd.setAttribute("class", "due");
     tr.appendChild(duetd);
     const donetd = UTIL.text_td(g.done || "");
+    donetd.setAttribute("class", "done");
     tr.appendChild(donetd);
     const triestd = UTIL.text_td(g.tries || "")
     triestd.setAttribute("class", "tries");
     tr.appendChild(triestd);
     const scoretd = document.createElement("td");
     if(g.score) {
-        UTIL.set_text(`${g.score} (${score2pct(g.score)})`);
+        UTIL.set_text(scoretd, `${g.score} (${score2pct(g.score)})`);
     }
     scoretd.setAttribute("class", "score");
     tr.appendChild(scoretd);
@@ -123,6 +139,7 @@ function row_from_goal(g) {
     complete.setAttribute("data-id", g.id);
     complete.setAttribute("title", "complete goal");
     UTIL.label("\u2713", complete);
+    complete.addEventListener("click", complete_goal);
     etd.appendChild(complete);
     const edit = document.createElement("button");
     edit.setAttribute("data-id", g.id);
@@ -227,11 +244,14 @@ function populate_courses(r) {
     r.json()
     .then(j => {
         console.log("populate-courses response:", j);
+        j.sort((a, b) => a.level - b.level);
 
         DATA.courses = new Map();
         DATA.chapters = new Map();
         const list = document.getElementById("course-names");
         UTIL.clear(list);
+        UTIL.clear(DISPLAY.course_list_genl);
+        UTIL.clear(DISPLAY.course_list_hs);
 
         for(const crs of j) {
             let chaps = new Array();
@@ -249,6 +269,21 @@ function populate_courses(r) {
             opt.value = crs.sym;
             UTIL.set_text(opt, option_text);
             list.appendChild(opt);
+
+            const tr = document.createElement("tr");
+            tr.appendChild(UTIL.text_td(crs.sym));
+            const titletd = UTIL.text_td(crs.title);
+            if(crs.book) {
+                const cite = document.createElement("cite");
+                UTIL.set_text(cite, crs.book);
+                titletd.appendChild(cite);
+            }
+            tr.appendChild(titletd);
+            if(crs.level < 9.0) {
+                DISPLAY.course_list_genl.appendChild(tr);
+            } else {
+                DISPLAY.course_list_hs.appendChild(tr);
+            }
         }
 
         request_action("populate-goals", "", "Populating pace calendars.")
@@ -264,6 +299,20 @@ function populate_goals(r) {
         DATA.paces = new Map();
         DATA.goals = new Map();
         UTIL.clear(DISPLAY.calbox);
+
+        j.sort((a, b) => {
+            if(a.last < b.last) {
+                return -1; 
+            } else if(a.last > b.last) {
+                return 1;
+            } else if(a.rest < b.rest) {
+                return -1;
+            } else if(a.rest > b.rest) {
+                return 1;
+            } else {
+                return 0;
+            }
+        })
 
         for(const p of j) {
             DATA.paces.set(p.uname, p);
@@ -284,7 +333,7 @@ function replace_pace(r) {
     .then(j => {
         console.log("update-pace response:", j);
 
-        DATA.paces.set(j);
+        DATA.paces.set(j.uname, j);
         for(const g of j.goals) {
             g.uname = j.uname;
             DATA.goals.set(g.id, g);
@@ -362,9 +411,22 @@ function request_action(action, body, description) {
     api_request(r, desc, field_response);
 }
 
+
+
 UTIL.ensure_on_load(() => {
     request_action("populate-courses", "", "Fetching Course data.")
 });
+
+document.getElementById("course-info-show")
+    .addEventListener("click", () => {
+        DISPLAY.course_list_div.style.display = "inline-flex";
+        DISPLAY.course_list_hide.style.display = "inline-flex";
+    });
+DISPLAY.course_list_hide
+    .addEventListener("click", () => {
+        DISPLAY.course_list_div.style.display = "none";
+        DISPLAY.course_list_hide.style.display = "none";
+    });
 
 /*
 
@@ -404,6 +466,18 @@ function populate_seq_list(evt) {
 document.getElementById("edit-goal-course")
     .addEventListener("change", populate_seq_list);
 
+function get_previous_goal(uname, goal_id) {
+    const goals = DATA.paces.get(uname).goals;
+    let prev_g = null;
+    goals.some((g, n) => {
+        if(g.id == goal_id) {
+            prev_g = goals[n-1];
+            return true;
+        }
+    });
+    return prev_g;
+}
+
 function edit_goal(evt) {
     const form = document.forms["edit-goal"];
     const del = document.getElementById("delete-goal");
@@ -420,6 +494,7 @@ function edit_goal(evt) {
         form.elements["review"].checked = g.rev;
         form.elements["incomplete"].checked = g.inc;
         del.disabled = false;
+        del.setAttribute("data-id", id);
         populate_seq_list();
         confirm.removeAttribute("data-uname");
     } else {
@@ -428,14 +503,27 @@ function edit_goal(evt) {
             if(ipt.checked) { ipt.checked = false; }
         }
         del.disabled = true;
+        del.removeAttribute("data-id");
         const uname = this.getAttribute("data-uname");
         confirm.setAttribute("data-uname", uname);
+
+        const last_g = DATA.paces.get(uname).goals.at(-1);
+        console.log(last_g);
+        if(last_g) {
+            const sym = last_g.sym;
+            const next_seq = last_g.seq + 1;
+            console.log(sym, next_seq);
+            if(DATA.courses.get(sym)?.chapters[next_seq]) {
+                form.elements["course"].value = sym;
+                form.elements["seq"].value = next_seq;
+            }
+        }
+
+
     }
 
     DISPLAY.goal_edit.showModal();
 }
-
-
 
 function edit_goal_submit(evt) {
     const form = document.forms["edit-goal"];
@@ -493,7 +581,84 @@ function edit_goal_submit(evt) {
 document.getElementById("edit-goal-cancel")
     .addEventListener("click", (evt) => {
         evt.preventDefault(),
-        DISPLAY.goal_edit.closest();
+        DISPLAY.goal_edit.close();
     });
 document.getElementById("edit-goal-confirm")
     .addEventListener("click", edit_goal_submit);
+
+async function delete_goal_submit(evt) {
+    const id = this.getAttribute("data-id");
+    const g = DATA.goals.get(Number(id));
+    const crs = DATA.courses.get(g.sym);
+    const chp = DATA.chapters.get(crs.chapters[g.seq]);
+    const q = `Are you sure you want to delete ${crs.title} ${chp.title} for ${g.uname}?.`;
+    if(await are_you_sure(q)) {
+        DISPLAY.goal_edit.close();
+        request_action("delete-goal", id, `Deleting Goal #${id}.`);
+    }
+}
+
+document.getElementById("delete-goal")
+    .addEventListener("click", delete_goal_submit);
+
+function complete_goal(evt) {
+    const id = this.getAttribute("data-id");
+    const form = document.forms["complete-goal"];
+    const g = DATA.goals.get(Number(id));
+
+    form.elements["id"].value = id;
+    if(g.done) {
+        form.elements["done"].value = g.done;
+    } else {
+        form.elements["done"].value = UTIL.date2iso(new Date());
+    }
+    form.elements["tries"].value = g.tries;
+    form.elements["score"].value = g.score;
+
+    DISPLAY.goal_complete.showModal();
+}
+
+function complete_goal_submit(evt) {
+    const form = document.forms["complete-goal"];
+    const data = new FormData(form);
+    const id = Number(data.get("id"));
+    const g = DATA.goals.get(id);
+
+    const valid_score = Boolean(interpret_score(data.get("score")));
+    const valid_date = (UTIL.iso2date(data.get("done")) != "Invalid Date");
+    let score = null;
+    let done = null;
+    if(UTIL.iso2date(data.get("done")) != "Invalid Date") {
+        done = data.get("done");
+    }
+    let tries = Number(data.get("tries"));
+    if(!tries) { tries = null; }
+
+    if(!(valid_score == valid_date)) {
+        console.log(score, done);
+        RQ.add_err("A valid completion date requires a valid score (and vice-versa).");
+        return;
+    }
+
+    if(valid_score) {
+        if(!tries) { tries = 1;}
+        score = data.get("score");
+    } else {
+        tries = null;
+    }
+
+    g.done = done;
+    g.score = score;
+    g.tries = tries;
+
+    DISPLAY.goal_complete.close();
+    request_action("update-goal", g, `Marking Goal $${g.id} complete.`);
+}
+
+document.getElementById("complete-goal-cancel")
+    .addEventListener("click", (evt => {
+        evt.preventDefault();
+        DISPLAY.goal_complete.close();
+    }));
+document.getElementById("complete-goal-confirm")
+    .addEventListener("click", complete_goal_submit);

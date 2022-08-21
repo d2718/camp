@@ -135,6 +135,7 @@ pub async fn api(
         "populate-goals" => populate_goals(&headers, glob.clone()).await,
         "add-goal" => insert_goal(body, glob.clone()).await,
         "update-goal" => update_goal(body, glob.clone()).await,
+        "delete-goal" => delete_goal(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognized x-camp-action value.", &x)
         ),
@@ -453,7 +454,7 @@ async fn update_goal(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response 
             return text_500(Some(
                 "Unable to deserializse as GoalData.".to_owned()
             ));
-        }
+        },
     };
 
     let g = match gdata.into_goal() {
@@ -469,4 +470,33 @@ async fn update_goal(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response 
     }
 
     update_pace(&g.uname, glob).await
+}
+
+async fn delete_goal(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request needs application/json body with Goal details.".to_owned()
+        ); },
+    };
+
+    let id: i64 = match &body.parse() {
+        Ok(n) => *n,
+        Err(e) => {
+            log::error!("Error deserializing {:?} as i64: {}", &body, &e);
+            return text_500(Some(
+                "Unable to deserialize into integer.".to_owned()
+            ));
+        },
+    };
+
+    let uname = match glob.read().await.data().read().await.delete_goal(id).await {
+        Ok(uname) => uname,
+        Err(e) => {
+            log::error!("Error deleting Goal w/id {} from database: {}", &id, &e);
+            return text_500(Some(format!("Error deleting from database: {}", &e)));
+        }
+    };
+
+    update_pace(&uname, glob).await
 }

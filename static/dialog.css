@@ -37,3 +37,10 @@ dialog button {
     border: 1px solid #234;
     border-radius: 0.5ex;
 }
+
+dialog hr {
+    height: 1ex;
+    background-color: #ccc;
+    border: 1px solid #bbb;
+    margin: 1em 0;
+}

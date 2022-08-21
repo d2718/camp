@@ -25,13 +25,6 @@ ul.tabs div.tab-content {
 }
 /* ul.tabs div.tab-content > div { margin-bottom: 1em; } */
 
-hr {
-    height: 1ex;
-    background-color: #ccc;
-    border: 1px solid #bbb;
-    margin: 1em 0;
-}
-
 /* Move the actual tab-selection radio buttons out of the window entirely. */
 input.tab-button {
     position: fixed;

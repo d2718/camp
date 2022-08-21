@@ -47,6 +47,8 @@ table.pace tbody td.due,
 table.pace tbody td.done,
 table.pace tbody td.tries,
 table.pace tbody td.score { font-family: Anka, monospace; }
+table.pace tbody td.tries,
+table.pace tbody td.score { text-align: right; }
 
 table.pace thead { background-color: #ccc; }
 table.pace thead th { padding: 0.5ex; }
@@ -69,9 +71,10 @@ table.pace td div.fullwidth {
 }
 
 tr.yet  { background-color: white; }
-tr.late { background-color: #ff8; }
-tr.done { background-color: #8f8; }
-tr.due  { background-color: #f88; }
+tr.late { background-color: #ffb; }
+tr.done { background-color: #bfb; }
+tr.due  { background-color: #fbb; }
+table.pace tr.bad td { color: #822; }
 
 table.pace td button {
     min-width: 1.5em; min-height: 1.5em;
@@ -79,3 +82,53 @@ table.pace td button {
     border-radius: 0.5ex;
     padding: 0 0.5ex;
 }
+
+div#course-info {
+    position: fixed;
+    /* display: inline-flex; */
+    display: none;
+    flex-direction: row;
+    align-items: flex-start;
+    right: 1em; bottom: 1em;
+    padding: 1em;
+    padding-right: 0;
+    gap: 1em;
+    background-color: white;
+    border: 1ex solid #aaa;
+    z-index: 3;
+}
+div#course-info table {
+    font-size: smaller;
+    border-collapse: collapse;
+}
+div#course-info tbody tr:nth-child(odd) { background-color: #ccc; }
+div#course-info td:first-child {
+    font-family: Anka, monospace;
+    font-size: initial;
+    text-align: right;
+    padding-right: 1ex;
+}
+div#course-info cite::before { content: ' ('; }
+div#course-info cite::after { content: ')'; }
+
+div#course-info-show,
+div#course-info-hide {
+    position: fixed;
+    bottom: 1em; right: 1em;
+    padding: 1ex;
+    background-color: white;
+    border: 1ex solid #aaa;
+}
+div#course-info-show { 
+    z-index: 2;
+    display: inline-flex;
+}
+div#course-info-hide { 
+    display: none;
+    z-index: 4;
+}
+
+div#course-info-show img,
+div#course-info-hide img { width: 1.5em; }
+
+div#course-table-spacer { width: calc(1.5em + 3ex); }

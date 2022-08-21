@@ -101,11 +101,13 @@ UTIL.set_text = function(elt, text) {
 }
 
 async function are_you_sure(question) {
-    UTIL.set_text(DISPLAY.confirm_message, question);
-    DISPLAY.confirm.showModal();
+    const dialog = document.getElementById("are-you-sure");
+    const msg_p = document.getElementById("are-you-sure-message");
+    UTIL.set_text(msg_p, question);
+    dialog.showModal();
     const p = new Promise((resolve, _) => {
-        DISPLAY.confirm.onclose = () => {
-            if(DISPLAY.confirm.returnValue == "ok") {
+        dialog.onclose = () => {
+            if(dialog.returnValue == "ok") {
                 resolve(true);
             } else {
                 resolve(false);
