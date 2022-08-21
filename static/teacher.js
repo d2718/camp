@@ -69,6 +69,17 @@ function score2pct(str) {
     }
 }
 
+function input_label_pair(label, id, name, type) {
+    const input = document.createElement("input");
+    if(type) { input.setAttribute("type", type); }
+    input.setAttribute("name", name);
+    input.id = id;
+    const lab = document.createElement("label");
+    lab.setAttribute("for", id);
+    UTIL.set_text(lab, label);
+    return [input, lab];
+}
+
 const PCAL_COLS = ["course", "chapter", "due", "done", "tries", "score", "edit"];
 
 function row_from_goal(g) {
@@ -152,6 +163,22 @@ function row_from_goal(g) {
     return tr;
 }
 
+function toggle_extra(evt) {
+    const uname = this.getAttribute("data-uname");
+    const tab = document.querySelector(`table.pace[data-uname="${uname}"]`);
+    const extra = tab.querySelector("tr.extra");
+    const butt = tab.querySelector("button.expander");
+    const lab = butt.querySelector("label");
+
+    if(extra.style.display == "table-row") {
+        extra.style.display = "none";
+        UTIL.set_text(lab, "+ more +");
+    } else {
+        extra.style.display = "table-row";
+        UTIL.set_text(lab, "- less -");
+    }
+}
+
 function make_calendar_table(cal) {
     const tab = document.createElement("table");
     tab.setAttribute("class", "pace");
@@ -194,6 +221,7 @@ function make_calendar_table(cal) {
         }
     }
 
+    // Populate table's <THEAD> with name and uname.
     const names = document.createElement("div");
     let name = document.createElement("span");
     name.setAttribute("class", "full");
@@ -206,6 +234,7 @@ function make_calendar_table(cal) {
     names.appendChild(name);
     summary.appendChild(names);
 
+    // Populate table's <THEAD> with #due/#done (pct).
     const numbers = document.createElement("div");
     let lead_pct = ratio2pct(cal.done_weight - cal.due_weight, cal.total_weight);
     if(cal.done_weight >= cal.due_weight) {
@@ -217,7 +246,9 @@ function make_calendar_table(cal) {
     UTIL.set_text(numbers, num_txt);
     summary.appendChild(numbers);
 
+    // Create row with extras-expander button and add-goal button.
     const more_tr = document.createElement("tr");
+    more_tr.setAttribute("class", "more");
     const more_td = document.createElement("td");
     more_tr.appendChild(more_td);
     more_td.setAttribute("colspan", PCAL_COLS.length);
@@ -227,7 +258,9 @@ function make_calendar_table(cal) {
 
     const expbutt = document.createElement("button");
     expbutt.setAttribute("data-uname", cal.uname);
+    expbutt.setAttribute("class", "expander");
     UTIL.label("+ more +", expbutt);
+    expbutt.addEventListener("click", toggle_extra);
     more_div.appendChild(expbutt);
     const addbutt = document.createElement("button");
     addbutt.setAttribute("data-uname", cal.uname);
@@ -236,6 +269,40 @@ function make_calendar_table(cal) {
     more_div.appendChild(addbutt);
 
     tbody.appendChild(more_tr);
+
+    // Create extras row and populate.
+    const ex_tr = document.createElement("tr");
+    ex_tr.setAttribute("class", "extra");
+    const ex_td = document.createElement("td");
+    ex_td.setAttribute("colspan", PCAL_COLS.length);
+    const form = document.createElement("form");
+    const form_id = `${cal.uname}-extra`;
+    form.id = form_id;
+    form.setAttribute("name", form_id);
+    
+    let ipt, lab;
+    [ipt, lab] = input_label_pair("Fall Notices", "fall-notices", "fall-notices", "number");
+    form.appendChild(lab); form.appendChild(ipt);
+    if(cal.fnot) { ipt.value = cal.fnot; }
+    [ipt, lab] = input_label_pair("Spring Notices", "spring-notices", "spring-notices", "number");
+    form.appendChild(ipt); form.appendChild(lab);
+    if(cal.snot) { ipt.value = cal.snot; }
+    [ipt, lab] = input_label_pair("Fall Exam Score", "fall-exam", "fall-exam");
+    form.appendChild(lab); form.appendChild(ipt);
+    if(cal.fex) { ipt.value = cal.fex; }
+    [ipt, lab] = input_label_pair("Spring Exam Score", "spring-exam", "spring-exam");
+    form.appendChild(ipt); form.appendChild(lab);
+    if(cal.sex) { ipt.value = cal.sex; }
+    const exsub_butt = document.createElement("button");
+    exsub_butt.setAttribute("data-uname", cal.uname);
+    exsub_butt.setAttribute("data-formname", form_id);
+    UTIL.label("update", exsub_butt);
+    form.appendChild(exsub_butt);
+    ex_td.appendChild(form);
+
+    ex_tr.appendChild(ex_td);
+    tbody.appendChild(ex_tr);
+
 
     return tab;
 }
@@ -346,6 +413,19 @@ function replace_pace(r) {
     .catch(log_numbered_error);
 }
 
+function populate_dates(r) {
+    r.json()
+    .then(j => {
+        console.log("populate-dates response:", j);
+
+        DATA.dates = new Map();
+        for(const [name, dstr] of Object.entries(j)) {
+            DATA.dates.set(name, UTIL.iso2date(dstr));
+        }
+    })
+    .catch(log_numbered_error);
+}
+
 function field_response(r) {
     if(!r.ok) {
         r.text()
@@ -375,8 +455,10 @@ function field_response(r) {
         populate_courses(r);
     } else if(action == "populate-goals") {
         populate_goals(r);
-    } else if(action = "update-pace") {
+    } else if(action == "update-pace") {
         replace_pace(r);
+    } else if(action == "populate-dates") {
+        populate_dates(r);
     } else {
         const e_n = next_err();
         const err_txt = `Unrecognized x-camp-action header: "${action}". (See console error #${e_n}.)`;
@@ -414,7 +496,8 @@ function request_action(action, body, description) {
 
 
 UTIL.ensure_on_load(() => {
-    request_action("populate-courses", "", "Fetching Course data.")
+    request_action("populate-courses", "", "Fetching Course data.");
+    request_action("populate-dates", "", "Fetching calendar events.");
 });
 
 document.getElementById("course-info-show")

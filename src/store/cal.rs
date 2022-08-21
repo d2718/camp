@@ -76,7 +76,7 @@ impl Store {
     }
 
     pub async fn get_calendar(&self) -> Result<Vec<Date>, DbError> {
-        log::trace!("Store::get_dates() called.");
+        log::trace!("Store::get_calendar() called.");
 
         let client = self.connect().await?;
         let rows = client.query(

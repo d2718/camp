@@ -83,6 +83,28 @@ table.pace td button {
     padding: 0 0.5ex;
 }
 
+table.pace tbody tr.more { background-color: #ccc; }
+table.pace tbody tr.extra { 
+    display: none;
+    background-color: #ccc;
+}
+
+table.pace tbody tr.extra form {
+    display: grid;
+    grid-template-columns: 1fr 10ex 10ex 1fr;
+    gap: 1ex;
+    justify-content: center;
+    align-content: center;
+    padding: 1ex;
+}
+tr.extra form > *:nth-child(4n+1) {
+    justify-self: end;
+}
+table.pace tbody tr.extra form > button {
+    justify-self: center;
+    grid-column: 2 / 4;
+}
+
 div#course-info {
     position: fixed;
     /* display: inline-flex; */
@@ -101,6 +123,7 @@ div#course-info table {
     font-size: smaller;
     border-collapse: collapse;
 }
+div#course-info td { padding: 0.2ex 0.5ex; }
 div#course-info tbody tr:nth-child(odd) { background-color: #ccc; }
 div#course-info td:first-child {
     font-family: Anka, monospace;

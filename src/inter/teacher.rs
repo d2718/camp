@@ -1,6 +1,8 @@
 /*!
 Subcrate for interoperation with Teacher users.
 */
+use std::collections::HashMap;
+
 use axum::{
     extract::Extension,
     http::header::{HeaderMap, HeaderName, HeaderValue},
@@ -131,6 +133,7 @@ pub async fn api(
     };
 
     match action {
+        "populate-dates" => populate_dates(glob.clone()).await,
         "populate-courses" => populate_courses(glob.clone()).await,
         "populate-goals" => populate_goals(&headers, glob.clone()).await,
         "add-goal" => insert_goal(body, glob.clone()).await,
@@ -140,6 +143,20 @@ pub async fn api(
             format!("{:?} is not a recognized x-camp-action value.", &x)
         ),
     }
+}
+
+async fn populate_dates(glob: Arc<RwLock<Glob>>) -> Response {
+    let dates_bucket: HashMap<String, String> = glob.read().await.dates
+        .iter().map(|(n, d)| (n.clone(), d.to_string())).collect();
+    
+    (
+        StatusCode::OK,
+        [(
+            HeaderName::from_static("x-camp-action"),
+            HeaderValue::from_static("populate-dates")
+        )],
+        Json(&dates_bucket)
+    ).into_response()
 }
 
 #[derive(Debug, Deserialize, Serialize)]
