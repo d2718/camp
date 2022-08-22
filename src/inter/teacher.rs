@@ -139,6 +139,7 @@ pub async fn api(
         "add-goal" => insert_goal(body, glob.clone()).await,
         "update-goal" => update_goal(body, glob.clone()).await,
         "delete-goal" => delete_goal(body, glob.clone()).await,
+        "update-numbers" => update_numbers(body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognized x-camp-action value.", &x)
         ),
@@ -309,6 +310,8 @@ struct PaceData<'a> {
     /// Fall/Spring exams
     fex: Option<&'a str>,
     sex: Option<&'a str>,
+    fex_frac: f32,
+    sex_frac: f32,
     /// Fall/Spring notices
     fnot: i16,
     snot: i16,
@@ -354,6 +357,8 @@ impl<'a> PaceData<'a> {
             goals,
             fex: pcal.student.fall_exam.as_deref(),
             sex: pcal.student.spring_exam.as_deref(),
+            fex_frac: pcal.student.fall_exam_fraction,
+            sex_frac: pcal.student.spring_exam_fraction,
             fnot: pcal.student.fall_notices,
             snot: pcal.student.spring_notices,
         };
@@ -516,4 +521,103 @@ async fn delete_goal(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response 
     };
 
     update_pace(&uname, glob).await
+}
+
+async fn update_numbers(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request needs application/json body with Goal details.".to_owned()
+        ); },
+    };
+
+    let pdata: PaceData = match serde_json::from_str(&body) {
+        Ok(pdata) => pdata,
+        Err(e) => {
+            log::error!("Error deserializing {:?} into PaceData: {}", &body, &e);
+            return text_500(Some("Unable to deserialize request data.".to_owned()));
+        },
+    };
+
+    log::debug!("update_numbers() rec'd body:\n{:#?}\n", &pdata);
+
+    let mut s = match glob.read().await.users.get(pdata.uname) {
+        Some(User::Student(s)) => s.clone(),
+        _ => {
+            log::error!("Data uname {:?} not a Student.", &pdata.uname);
+            return text_500(Some(format!("{:?} is not a Student.", &pdata.uname)));
+        }
+    };
+
+    s.fall_notices = pdata.fnot;
+    s.spring_notices = pdata.snot;
+    s.fall_exam = match maybe_parse_score_str(pdata.fex.as_deref()) {
+        Err(e) => {
+            log::error!("Error parsing fall exam score from {:?}: {}.", &pdata, &e);
+            return text_500(Some(format!(
+                "{:?} is not a valid Fall Exam score: {}", pdata.fex.as_deref(), &e
+            )));
+        },
+        Ok(Some(_)) => pdata.fex.map(|s| s.to_string()),
+        Ok(None) => None,
+    };
+    s.fall_exam = match maybe_parse_score_str(pdata.fex.as_deref()) {
+        Err(e) => {
+            log::error!("Error parsing spring exam score from {:?}: {}.", &pdata, &e);
+            return text_500(Some(format!(
+                "{:?} is not a valid Spring Exam score: {}", pdata.fex.as_deref(), &e
+            )));
+        },
+        Ok(Some(_)) => pdata.fex.map(|s| s.to_string()),
+        Ok(None) => None,
+    };
+    s.fall_exam_fraction = pdata.fex_frac;
+    s.spring_exam_fraction = pdata.sex_frac;
+
+    {
+        let mut glob = glob.write().await;
+        let data = glob.data();
+        let data_reader = data.read().await;
+        let mut client = match data_reader.connect().await {
+            Ok(c) => c,
+            Err(e) => {
+                log::error!("Error connection with database: {}", &e);
+                return text_500(Some(format!(
+                    "Error connecting w/database: {}", &e
+                )));
+            },
+        };
+        let t = match client.transaction().await {
+            Ok(t) => t,
+            Err(e) => { 
+                log::error!("Error beginning transaction: {}", &e);
+                return text_500(Some(format!(
+                    "Error beginning database transaction: {}", &e
+                )));
+            },
+        };
+
+        if let Err(e) = data_reader.update_student(&t, &s).await {
+            log::error!("Error updating student w/ data {:?}: {}", &s, &e);
+            return text_500(Some(format!(
+                "Error updating student: {}", &e
+            )));
+        }
+
+        if let Err(e) = t.commit().await {
+            log::error!("Error committing transaction: {}", &e);
+            return text_500(Some(format!(
+                "Error committing database transaction: {}", &e
+            )));
+        }
+
+        if let Err(e) = glob.refresh_users().await {
+            log::error!(
+                "Error refreshing user hash from database: {}", &e
+            );
+            return text_500(Some("Unable to reread users from database.".to_owned()));
+        }
+    }
+
+    update_pace(pdata.uname, glob).await
 }

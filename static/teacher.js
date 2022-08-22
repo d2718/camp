@@ -281,24 +281,54 @@ function make_calendar_table(cal) {
     form.setAttribute("name", form_id);
     
     let ipt, lab;
-    [ipt, lab] = input_label_pair("Fall Notices", "fall-notices", "fall-notices", "number");
+    [ipt, lab] = input_label_pair("Fall Notices", `${cal.uname}-fall-notices`, "fall-notices", "number");
     form.appendChild(lab); form.appendChild(ipt);
-    if(cal.fnot) { ipt.value = cal.fnot; }
-    [ipt, lab] = input_label_pair("Spring Notices", "spring-notices", "spring-notices", "number");
+    ipt.setAttribute("min", 0);
+    ipt.required = true;
+    ipt.value = cal.fnot ? cal.fnot : 0;
+    [ipt, lab] = input_label_pair("Spring Notices", `${cal.uname}-spring-notices`, "spring-notices", "number");
     form.appendChild(ipt); form.appendChild(lab);
-    if(cal.snot) { ipt.value = cal.snot; }
-    [ipt, lab] = input_label_pair("Fall Exam Score", "fall-exam", "fall-exam");
+    ipt.setAttribute("min", 0);
+    ipt.required = true;
+    ipt.value = cal.snot ? cal.snot : 0;
+    [ipt, lab] = input_label_pair("Fall Exam Score", `${cal.uname}-fall-exam`, "fall-exam");
     form.appendChild(lab); form.appendChild(ipt);
     if(cal.fex) { ipt.value = cal.fex; }
-    [ipt, lab] = input_label_pair("Spring Exam Score", "spring-exam", "spring-exam");
+    [ipt, lab] = input_label_pair("Spring Exam Score", `${cal.uname}-spring-exam`, "spring-exam");
     form.appendChild(ipt); form.appendChild(lab);
     if(cal.sex) { ipt.value = cal.sex; }
+    [ipt, lab] = input_label_pair("Fall Exam Fraction", `${cal.uname}-fall-exam-frac`, "fall-exam-frac", "number");
+    ipt.setAttribute("min", "0.00");
+    ipt.setAttribute("max", "1.00");
+    ipt.setAttribute("step", "0.01");
+    ipt.value = cal.fex_frac;
+    ipt.required = true;
+    form.appendChild(lab); form.appendChild(ipt);
+    [ipt, lab] = input_label_pair("Spring Exam Fraction", `${cal.uname}-spring-exam-frac`, "spring-exam-frac", "number");
+    ipt.setAttribute("min", "0.00");
+    ipt.setAttribute("max", "1.00");
+    ipt.setAttribute("step", "0.01");
+    ipt.value = cal.sex_frac;
+    ipt.required = true;
+    form.appendChild(ipt), form.appendChild(lab);
+
     const exsub_butt = document.createElement("button");
     exsub_butt.setAttribute("data-uname", cal.uname);
     exsub_butt.setAttribute("data-formname", form_id);
     UTIL.label("update", exsub_butt);
+    exsub_butt.addEventListener("click", update_numbers_submit);
     form.appendChild(exsub_butt);
     ex_td.appendChild(form);
+    //ex_td.appendChild(document.createElement("br"));
+
+    const last_div = document.createElement("div");
+    const autobutt = document.createElement("button");
+    UTIL.label("autopace", autobutt);
+    last_div.appendChild(autobutt);
+    const nuke = document.createElement("button");
+    UTIL.label("clear all goals", nuke);
+    last_div.appendChild(nuke);
+    ex_td.appendChild(last_div);
 
     ex_tr.appendChild(ex_td);
     tbody.appendChild(ex_tr);
@@ -409,6 +439,9 @@ function replace_pace(r) {
         const tab = make_calendar_table(j);
         const current_tab = document.querySelector(`table.pace[data-uname="${j.uname}"]`);
         current_tab.replaceWith(tab);
+        if(current_tab.querySelector("tr.extra").style.display == "table-row") {
+            tab.querySelector("button.expander").click();
+        }
     })
     .catch(log_numbered_error);
 }
@@ -745,3 +778,39 @@ document.getElementById("complete-goal-cancel")
     }));
 document.getElementById("complete-goal-confirm")
     .addEventListener("click", complete_goal_submit);
+
+
+function update_numbers_submit(evt) {
+    evt.preventDefault();
+    const uname = this.getAttribute("data-uname");
+    const data = new FormData(document.forms[`${uname}-extra`]);
+    const cal = JSON.parse(JSON.stringify(DATA.paces.get(uname)));
+    cal.goals = [];
+
+    cal.fnot = Number(data.get("fall-notices"));
+    cal.snot = Number(data.get("spring-notices"));
+    cal.fex = null;
+    cal.sex = null;
+    cal.fex_frac = Number(data.get("fall-exam-frac"));
+    cal.sex_frac = Number(data.get("spring-exam-frac"));
+
+    const fex = data.get("fall-exam").trim();
+    if(fex) {
+        if(interpret_score(fex)) {
+            cal.fex = fex;
+        } else {
+            RQ.add_err(`"${fex}" is not a valid Fall Exam score.`);
+        }
+    }
+
+    const sex = data.get("spring-exam").trim();
+    if(sex) {
+        if(interpret_score(sex)) {
+            cal.sex = sex;
+        } else {
+            RQ.add_ErR(`"${sex}" is not a valid Spring Exam score.`);
+        }
+    }
+
+    request_action("update-numbers", cal, `Updating scores for ${cal.first} ${cal.rest}`);
+}

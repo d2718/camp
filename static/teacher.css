@@ -105,6 +105,12 @@ table.pace tbody tr.extra form > button {
     grid-column: 2 / 4;
 }
 
+table.pace tbody tr.extra td div {
+    display: flex;
+    justify-content: space-around;
+    padding: 0.5ex;
+}
+
 div#course-info {
     position: fixed;
     /* display: inline-flex; */
