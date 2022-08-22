@@ -50,6 +50,13 @@ table.pace tbody td.score { font-family: Anka, monospace; }
 table.pace tbody td.tries,
 table.pace tbody td.score { text-align: right; }
 
+table.pace tbody tr.semsum { background-color: #ccc; }
+table.pace tbody tr.semsum td:first-child { text-align: right; }
+table.pace tbody tr.semsum td:last-child {
+    text-align: left;
+    font-family: Anka;
+}
+
 table.pace thead { background-color: #ccc; }
 table.pace thead th { padding: 0.5ex; }
 table.pace div.summary {

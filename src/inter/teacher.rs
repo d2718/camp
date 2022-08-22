@@ -561,14 +561,14 @@ async fn update_numbers(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respon
         Ok(Some(_)) => pdata.fex.map(|s| s.to_string()),
         Ok(None) => None,
     };
-    s.fall_exam = match maybe_parse_score_str(pdata.fex.as_deref()) {
+    s.spring_exam = match maybe_parse_score_str(pdata.sex.as_deref()) {
         Err(e) => {
             log::error!("Error parsing spring exam score from {:?}: {}.", &pdata, &e);
             return text_500(Some(format!(
-                "{:?} is not a valid Spring Exam score: {}", pdata.fex.as_deref(), &e
+                "{:?} is not a valid Spring Exam score: {}", pdata.sex.as_deref(), &e
             )));
         },
-        Ok(Some(_)) => pdata.fex.map(|s| s.to_string()),
+        Ok(Some(_)) => pdata.sex.map(|s| s.to_string()),
         Ok(None) => None,
     };
     s.fall_exam_fraction = pdata.fex_frac;

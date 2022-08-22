@@ -179,6 +179,248 @@ function toggle_extra(evt) {
     }
 }
 
+function make_calendar_footer(cal) {
+    const ex_tr = document.createElement("tr");
+    ex_tr.setAttribute("class", "extra");
+    const ex_td = document.createElement("td");
+    ex_td.setAttribute("colspan", PCAL_COLS.length);
+    const form = document.createElement("form");
+    const form_id = `${cal.uname}-extra`;
+    form.id = form_id;
+    form.setAttribute("name", form_id);
+    
+    let ipt, lab;
+    [ipt, lab] = input_label_pair("Fall Notices", `${cal.uname}-fall-notices`, "fall-notices", "number");
+    form.appendChild(lab); form.appendChild(ipt);
+    ipt.setAttribute("min", 0);
+    ipt.required = true;
+    ipt.value = cal.fnot ? cal.fnot : 0;
+    [ipt, lab] = input_label_pair("Spring Notices", `${cal.uname}-spring-notices`, "spring-notices", "number");
+    form.appendChild(ipt); form.appendChild(lab);
+    ipt.setAttribute("min", 0);
+    ipt.required = true;
+    ipt.value = cal.snot ? cal.snot : 0;
+    [ipt, lab] = input_label_pair("Fall Exam Score", `${cal.uname}-fall-exam`, "fall-exam");
+    form.appendChild(lab); form.appendChild(ipt);
+    if(cal.fex) { ipt.value = cal.fex; }
+    [ipt, lab] = input_label_pair("Spring Exam Score", `${cal.uname}-spring-exam`, "spring-exam");
+    form.appendChild(ipt); form.appendChild(lab);
+    if(cal.sex) { ipt.value = cal.sex; }
+    [ipt, lab] = input_label_pair("Fall Exam Fraction", `${cal.uname}-fall-exam-frac`, "fall-exam-frac", "number");
+    ipt.setAttribute("min", "0.00");
+    ipt.setAttribute("max", "1.00");
+    ipt.setAttribute("step", "0.01");
+    ipt.value = cal.fex_frac;
+    ipt.required = true;
+    form.appendChild(lab); form.appendChild(ipt);
+    [ipt, lab] = input_label_pair("Spring Exam Fraction", `${cal.uname}-spring-exam-frac`, "spring-exam-frac", "number");
+    ipt.setAttribute("min", "0.00");
+    ipt.setAttribute("max", "1.00");
+    ipt.setAttribute("step", "0.01");
+    ipt.value = cal.sex_frac;
+    ipt.required = true;
+    form.appendChild(ipt), form.appendChild(lab);
+
+    const exsub_butt = document.createElement("button");
+    exsub_butt.setAttribute("data-uname", cal.uname);
+    exsub_butt.setAttribute("data-formname", form_id);
+    UTIL.label("update", exsub_butt);
+    exsub_butt.addEventListener("click", update_numbers_submit);
+    form.appendChild(exsub_butt);
+    ex_td.appendChild(form);
+    //ex_td.appendChild(document.createElement("br"));
+
+    const last_div = document.createElement("div");
+    const autobutt = document.createElement("button");
+    UTIL.label("autopace", autobutt);
+    last_div.appendChild(autobutt);
+    const nuke = document.createElement("button");
+    UTIL.label("clear all goals", nuke);
+    last_div.appendChild(nuke);
+    ex_td.appendChild(last_div);
+
+    ex_tr.appendChild(ex_td);
+
+    return ex_tr;
+}
+
+function add_grades_to_calendar(tab, cal) {
+    const sem_div = DATA.dates.get("end-fall");
+
+    const semf_due = [];
+    const sems_due = [];
+    const semf_done = [];
+    const sems_done = [];
+
+    let semf_inc = false;
+    let sems_inc = false;
+
+    for(const g of cal.goals) {
+        if(g.due) {
+            const due = UTIL.iso2date(g.due);
+            if(due < sem_div) {
+                semf_due.push(g);
+                if(!g.done) { semf_inc = true; }
+            } else {
+                sems_due.push(g);
+                if(!g.done) { sems_inc = true; }
+            }
+        }
+        if(g.done) {
+            const done = UTIL.iso2date(g.done);
+            if(done < sem_div) {
+                semf_done.push(g);
+            } else {
+                sems_done.push(g);
+            }
+        }
+    }
+
+    console.debug(semf_due, sems_due, semf_done, sems_done, semf_inc, sems_inc);
+
+    if(semf_done.length > 0) {
+        const final_goal = semf_done.at(-1);
+        const test_avg = semf_done.reduce((prev, cur) => {
+            const score = interpret_score(cur.score);
+            return prev + score;
+        }, 0.0) / semf_done.length;
+        let test_pct = test_avg * 100.0;
+
+        const test_tr = document.createElement("tr");
+        test_tr.setAttribute("class", "semsum");
+        let td = UTIL.text_td("Fall Test Average:");
+        td.setAttribute("colspan", "5");
+        test_tr.appendChild(td);
+        let test_text = `${Math.round(test_pct)}%`;
+        if(semf_inc) { test_text = test_text + " (I)"; }
+        td = UTIL.text_td(test_text);
+        td.setAttribute("colspan", "2");
+        test_tr.appendChild(td);
+
+        const final_tr = tab.querySelector(`tr[data-id="${final_goal.id}"]`);
+        final_tr.insertAdjacentElement("afterend", test_tr);
+
+        if(cal.fex) {
+            const exam_tr = document.createElement("tr");
+            exam_tr.setAttribute("class", "semsum");
+            let td = UTIL.text_td("Fall Final:");
+            td.setAttribute("colspan", "5");
+            exam_tr.appendChild(td);
+            const exam_score = interpret_score(cal.fex) * 100;
+            const exam_text = `${Math.round(exam_score)}%`;
+            td = UTIL.text_td(exam_text);
+            td.setAttribute("colspan", "2");
+            exam_tr.appendChild(td);
+            test_tr.insertAdjacentElement("afterend", exam_tr);
+            
+            let sem_grade = (exam_score * cal.fex_frac) + (test_pct * (1.0 - cal.fex_frac));
+
+            let notice_tr = null;
+            if(cal.fnot > 0) {
+                notice_tr = document.createElement("tr");
+                notice_tr.setAttribute("class", "semsum");
+                let td = UTIL.text_td("Notices:");
+                td.setAttribute("colspan", "5");
+                notice_tr.appendChild(td);
+                const notice_text = `-${cal.fnot}%`;
+                td = UTIL.text_td(notice_text);
+                td.setAttribute("colspan", "2");
+                notice_tr.appendChild(td);
+                exam_tr.insertAdjacentElement("afterend", notice_tr);
+                sem_grade = sem_grade - cal.fnot;
+            }
+
+            const sem_tr = document.createElement("tr");
+            sem_tr.setAttribute("class", "semsum");
+            td = UTIL.text_td("Fall Semester Grade:");
+            td.setAttribute("colspan", "5");
+            sem_tr.appendChild(td);
+            let sem_text = `${Math.round(sem_grade)}%`;
+            if(semf_inc) { sem_text = sem_text + " (I)"; }
+            td = UTIL.text_td(sem_text);
+            td.setAttribute("colspan", "2");
+            sem_tr.appendChild(td);
+
+            if(notice_tr) {
+                notice_tr.insertAdjacentElement("afterend", sem_tr);
+            } else {
+                exam_tr.insertAdjacentElement("afterend", sem_tr);
+            }
+        }
+    }
+
+    if(sems_done.length > 0) {
+        const final_goal = sems_done.at(-1);
+        const test_avg = sems_done.reduce((prev, cur) => {
+            const score = interpret_score(cur.score);
+            return prev + score;
+        }, 0.0) / sems_done.length;
+        let test_pct = test_avg * 100.0;
+
+        const test_tr = document.createElement("tr");
+        test_tr.setAttribute("class", "semsum");
+        let td = UTIL.text_td("Fall Test Average:");
+        td.setAttribute("colspan", "5");
+        test_tr.appendChild(td);
+        let test_text = `${Math.round(test_pct)}%`;
+        if(semf_inc) { test_text = test_text + " (I)"; }
+        td = UTIL.text_td(test_text);
+        td.setAttribute("colspan", "2");
+        test_tr.appendChild(td);
+
+        const final_tr = tab.querySelector(`tr[data-id="${final_goal.id}"]`);
+        final_tr.insertAdjacentElement("afterend", test_tr);
+
+        if(cal.sex) {
+            const exam_tr = document.createElement("tr");
+            exam_tr.setAttribute("class", "semsum");
+            let td = UTIL.text_td("Fall Final:");
+            td.setAttribute("colspan", "5");
+            exam_tr.appendChild(td);
+            const exam_score = interpret_score(cal.sex) * 100;
+            const exam_text = `${Math.round(exam_score)}%`;
+            td = UTIL.text_td(exam_text);
+            td.setAttribute("colspan", "2");
+            exam_tr.appendChild(td);
+            test_tr.insertAdjacentElement("afterend", exam_tr);
+            
+            let sem_grade = (exam_score * cal.sex_frac) + (test_pct * (1.0 - cal.sex_frac));
+
+            let notice_tr = null;
+            if(cal.snot > 0) {
+                notice_tr = document.createElement("tr");
+                notice_tr.setAttribute("class", "semsum");
+                let td = UTIL.text_td("Notices:");
+                td.setAttribute("colspan", "5");
+                notice_tr.appendChild(td);
+                const notice_text = `-${cal.snot}%`;
+                td = UTIL.text_td(notice_text);
+                td.setAttribute("colspan", "2");
+                notice_tr.appendChild(td);
+                exam_tr.insertAdjacentElement("afterend", notice_tr);
+                sem_grade = sem_grade - cal.snot;
+            }
+
+            const sem_tr = document.createElement("tr");
+            sem_tr.setAttribute("class", "semsum");
+            td = UTIL.text_td("Fall Semester Grade:");
+            td.setAttribute("colspan", "5");
+            sem_tr.appendChild(td);
+            let sem_text = `${Math.round(sem_grade)}%`;
+            if(semf_inc) { sem_text = sem_text + " (I)"; }
+            td = UTIL.text_td(sem_text);
+            td.setAttribute("colspan", "2");
+            sem_tr.appendChild(td);
+
+            if(notice_tr) {
+                notice_tr.insertAdjacentElement("afterend", sem_tr);
+            } else {
+                exam_tr.insertAdjacentElement("afterend", sem_tr);
+            }
+        }
+    }
+}
+
 function make_calendar_table(cal) {
     const tab = document.createElement("table");
     tab.setAttribute("class", "pace");
@@ -271,68 +513,10 @@ function make_calendar_table(cal) {
     tbody.appendChild(more_tr);
 
     // Create extras row and populate.
-    const ex_tr = document.createElement("tr");
-    ex_tr.setAttribute("class", "extra");
-    const ex_td = document.createElement("td");
-    ex_td.setAttribute("colspan", PCAL_COLS.length);
-    const form = document.createElement("form");
-    const form_id = `${cal.uname}-extra`;
-    form.id = form_id;
-    form.setAttribute("name", form_id);
-    
-    let ipt, lab;
-    [ipt, lab] = input_label_pair("Fall Notices", `${cal.uname}-fall-notices`, "fall-notices", "number");
-    form.appendChild(lab); form.appendChild(ipt);
-    ipt.setAttribute("min", 0);
-    ipt.required = true;
-    ipt.value = cal.fnot ? cal.fnot : 0;
-    [ipt, lab] = input_label_pair("Spring Notices", `${cal.uname}-spring-notices`, "spring-notices", "number");
-    form.appendChild(ipt); form.appendChild(lab);
-    ipt.setAttribute("min", 0);
-    ipt.required = true;
-    ipt.value = cal.snot ? cal.snot : 0;
-    [ipt, lab] = input_label_pair("Fall Exam Score", `${cal.uname}-fall-exam`, "fall-exam");
-    form.appendChild(lab); form.appendChild(ipt);
-    if(cal.fex) { ipt.value = cal.fex; }
-    [ipt, lab] = input_label_pair("Spring Exam Score", `${cal.uname}-spring-exam`, "spring-exam");
-    form.appendChild(ipt); form.appendChild(lab);
-    if(cal.sex) { ipt.value = cal.sex; }
-    [ipt, lab] = input_label_pair("Fall Exam Fraction", `${cal.uname}-fall-exam-frac`, "fall-exam-frac", "number");
-    ipt.setAttribute("min", "0.00");
-    ipt.setAttribute("max", "1.00");
-    ipt.setAttribute("step", "0.01");
-    ipt.value = cal.fex_frac;
-    ipt.required = true;
-    form.appendChild(lab); form.appendChild(ipt);
-    [ipt, lab] = input_label_pair("Spring Exam Fraction", `${cal.uname}-spring-exam-frac`, "spring-exam-frac", "number");
-    ipt.setAttribute("min", "0.00");
-    ipt.setAttribute("max", "1.00");
-    ipt.setAttribute("step", "0.01");
-    ipt.value = cal.sex_frac;
-    ipt.required = true;
-    form.appendChild(ipt), form.appendChild(lab);
-
-    const exsub_butt = document.createElement("button");
-    exsub_butt.setAttribute("data-uname", cal.uname);
-    exsub_butt.setAttribute("data-formname", form_id);
-    UTIL.label("update", exsub_butt);
-    exsub_butt.addEventListener("click", update_numbers_submit);
-    form.appendChild(exsub_butt);
-    ex_td.appendChild(form);
-    //ex_td.appendChild(document.createElement("br"));
-
-    const last_div = document.createElement("div");
-    const autobutt = document.createElement("button");
-    UTIL.label("autopace", autobutt);
-    last_div.appendChild(autobutt);
-    const nuke = document.createElement("button");
-    UTIL.label("clear all goals", nuke);
-    last_div.appendChild(nuke);
-    ex_td.appendChild(last_div);
-
-    ex_tr.appendChild(ex_td);
+    const ex_tr = make_calendar_footer(cal);
     tbody.appendChild(ex_tr);
 
+    add_grades_to_calendar(tab, cal);
 
     return tab;
 }
