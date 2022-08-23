@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>CAMP | Boss View ({{uname}})</title>
+        <link rel="stylesheet" href="/static/boss.css">
+        <link rel="icon" type="image/png" href="/static/camp_icon.png">
+        <script src="/static/boss.js" defer></script>
+    </head>
+    <body>
+        <div id="header">
+            <h1>Boss <kbd>{{uname}}</kbd> view</h1>
+            <div id="controls">
+                <span>sort by:</span>
+                <button id="name"><label>name</label></button>
+                <button id="teacher"><label>teacher</label></button>
+                <button id="lag"><label>lag</label></button>
+            </div>
+        </div>
+        <div id="cals">{{calendars}}</div>
+    </body>
+</html>
