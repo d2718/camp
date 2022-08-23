@@ -19,7 +19,7 @@ CREATE TABLE goals (
 ```
 */
 use futures::stream::{FuturesUnordered, StreamExt};
-use tokio_postgres::{Row, types::ToSql, types::Type};
+use tokio_postgres::{Row, Transaction, types::ToSql, types::Type};
 
 use super::{Store, DbError};
 use crate::{
@@ -188,6 +188,52 @@ impl Store {
         Ok(())
     }
 
+    pub async fn update_due_dates(
+        &self,
+        goals: &[Goal]
+    ) -> Result<usize, DbError> {
+        log::trace!("Store::update_goals( [ {} goals] ) called.", &goals.len());
+
+        let mut client = self.connect().await?;
+        let t = client.transaction().await?;
+
+        let update_stmt = t.prepare_typed(
+            "UPDATE goals SET due = $1 WHERE id = $2",
+            &[ Type::DATE, Type::INT8]
+        ).await?;
+
+        let pvec: Vec<[&(dyn ToSql + Sync); 2]> = goals.iter()
+            .map(|g| {
+                let p: [&(dyn ToSql + Sync); 2] = [&g.due, &g.id];
+                p
+            }).collect();
+        
+        let mut n_changed: u64 = 0;
+        {
+            let mut inserts = FuturesUnordered::new();
+            for params in pvec.iter() {
+                inserts.push(
+                    t.execute(&update_stmt, params)
+                );
+            }
+
+            while let Some(res) = inserts.next().await {
+                match res {
+                    Ok(n) => { n_changed += n; },
+                    Err(e) => {
+                        let estr = format!(
+                            "Error updating goal: {}", &e
+                        );
+                        return Err(DbError(estr));
+                    },
+                }
+            }
+        }
+        t.commit().await?;
+
+        Ok(n_changed as usize)
+    }
+
     pub async fn delete_goal(
         &self,
         id: i64
@@ -231,6 +277,20 @@ impl Store {
         }
 
         Ok(goals)
+    }
+
+    pub async fn delete_goals_by_student(
+        &self,
+        t: &Transaction<'_>,
+        uname: &str
+    ) -> Result<usize, DbError> {
+        log::trace!("Store::delete_goals_by_student( {:?} ) called.", uname);
+
+        let n_goals = t.execute(
+            "DELETE FROM goals WHERE uname = $1", &[&uname]
+        ).await?;
+
+        Ok(n_goals as usize)
     }
 
     pub async fn get_goals_by_teacher(

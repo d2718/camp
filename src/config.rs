@@ -559,10 +559,12 @@ impl<'a> Glob {
             },
         };
 
+        let students = self.get_students_by_teacher(tuname);
+
         let mut goals = self.data.read().await.get_goals_by_teacher(tuname).await?;
 
         let mut goal_map: HashMap<String, Vec<Goal>> =
-            HashMap::with_capacity(self.students_per_teacher);
+            HashMap::with_capacity(students.len());
         
         for g in goals.drain(..) {
             if let Some(v) = goal_map.get_mut(&g.uname) {
@@ -571,6 +573,12 @@ impl<'a> Glob {
                 let uname = g.uname.clone();
                 let v = vec![g];
                 goal_map.insert(uname, v);
+            }
+        }
+
+        for s in students {
+            if goal_map.get(s.uname()).is_none() {
+                goal_map.insert(s.uname().to_string(), vec![]);
             }
         }
 

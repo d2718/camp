@@ -17,7 +17,13 @@ const AUTH = {
     </head>
     <body>
         <d id="content-container">
-            <h1>Teacher <kbd>{{uname}}</kbd> ({{name}})</h1>
+            <div id="headline">
+                <h1>Teacher <kbd>{{uname}}</kbd> ({{name}})</h1>
+                <button id="upload-goals">
+                    <label for="upload-goals">upload CSV of Goals</label>
+                </button>
+            </div>
+            
             <div id="cals"></div>
         </div>
 
@@ -52,6 +58,20 @@ const AUTH = {
                 <label><img src="/static/dismiss.svg"></label>
             </button>
         </div>
+
+        <dialog id="upload-goals-dialog" class="edit">
+            <h1>Upload Goals File</h1>
+            <form name="upload-goals" method="dialog">
+                <label for="upload-goals-file">file</label>
+                <input type="file" name="file" id="upload-goals-file" required>
+                <button id="upload-goals-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="upload-goals-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+            </form>
+        </dialog>
 
         <dialog id="complete-goal" class="edit">
             <h1>Goal Details</h1>

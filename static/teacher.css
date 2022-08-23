@@ -23,6 +23,18 @@ div#content-container {
     background-color: #aaa;
     padding: 1em;
 }
+
+div#headline {
+    display: flex;
+    justify-content: space-between;
+}
+div#headline h1 { display: inline-block; }
+div#headline button {
+    border: 1px solid #888;
+    border-radius: 0.5ex;
+    padding: 0 0.5ex;
+}
+
 div#cals {
     display: flex;
     flex-wrap: wrap;

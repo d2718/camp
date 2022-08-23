@@ -1,7 +1,10 @@
 /*!
 Subcrate for interoperation with Teacher users.
 */
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    io::Cursor,
+};
 
 use axum::{
     extract::Extension,
@@ -140,6 +143,9 @@ pub async fn api(
         "update-goal" => update_goal(body, glob.clone()).await,
         "delete-goal" => delete_goal(body, glob.clone()).await,
         "update-numbers" => update_numbers(body, glob.clone()).await,
+        "autopace" => autopace(body, glob.clone()).await,
+        "clear-goals" => clear_goals(body, glob.clone()).await,
+        "upload-goals" => upload_goals(&headers, body, glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognized x-camp-action value.", &x)
         ),
@@ -620,4 +626,173 @@ async fn update_numbers(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respon
     }
 
     update_pace(pdata.uname, glob).await
+}
+
+async fn autopace(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request needs Student user name in body.".to_owned()
+        ); },
+    };
+
+    let uname: &str = &body;
+
+    {
+        let glob = glob.read().await;
+        let mut p = match glob.get_pace_by_student(uname).await {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Error retrieving pace data for {:?}: {}", uname, &e);
+                return text_500(Some(format!(
+                    "Error retrieving pace data from database: {}", &e
+                )));
+            },
+        };
+
+        if let Err(e) = p.autopace(&glob.calendar) {
+            log::error!(
+                "Error calling Goal::autopace( [ {} dates ] ) for {:?}: {}",
+                &glob.calendar.len(), &p, &e
+            );
+            return text_500(Some(format!(
+                "Error pacing due dates: {}", &e
+            )));
+        }
+
+        let data = glob.data();
+        if let Err(e) = data.read().await.update_due_dates(&p.goals).await {
+            log::error!(
+                "Error updating dates from {:?}: {}", &p, &e
+            );
+            return text_500(Some(format!(
+                "Error updating due dates in database: {}", &e
+            )));
+        };
+    }
+
+    update_pace(uname, glob).await
+}
+
+async fn clear_goals(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request needs student user name in body.".to_owned()
+        ); },
+    };
+
+    let uname: &str = &body;
+
+    {
+        let glob = glob.read().await;
+        let data = glob.data();
+        let data_reader = data.read().await;
+        let mut client = match data_reader.connect().await {
+            Ok(client) => client,
+            Err(e) => {
+                let estr = format!("Error connecting to database: {}", &e);
+                log::error!("{}", &estr);
+                return text_500(Some(estr));
+            }
+        };
+        let t = match client.transaction().await {
+            Ok(t) => t,
+            Err(e) => {
+                let estr = format!("Error beginning transaction: {}", &e);
+                log::error!("{}", &estr);
+                return text_500(Some(estr));
+            }
+        };
+
+        if let Err(e) = data_reader.delete_goals_by_student(&t, uname).await {
+            log::error!(
+                "Error deleting goals for {:?}: {}", uname, &e
+            );
+            return text_500(Some(format!(
+                "Error deleting goals: {}", &e
+            )));
+        }
+
+        if let Err(e) = t.commit().await {
+            log::error!(
+                "Error committing clear-goals transaction: {}", &e
+            );
+            return text_500(Some(format!(
+                "Error committing transaction: {}", &e
+            )));
+        }
+    }
+
+    update_pace(uname, glob).await
+}
+
+async fn upload_goals(
+    headers: &HeaderMap,
+    body: Option<String>,
+    glob: Arc<RwLock<Glob>>
+) -> Response {
+    let body = match body {
+        Some(body) => body,
+        None => { return respond_bad_request(
+            "Request needs text/csv body of Goal details.".to_owned()
+        ); },
+    };
+    
+    let tuname: &str = match headers.get("x-camp-uname") {
+        Some(uname) => match uname.to_str() {
+            Ok(s) => s,
+            Err(_) => { return text_500(None); },
+        },
+        None => { return text_500(None); }
+    };
+
+    let mut others_students = String::new();
+    let mut goals: Vec<Goal> = Vec::new();
+    {
+        let glob = glob.read().await;
+
+        let reader = Cursor::new(body);
+        let mut pcals = match Pace::from_csv(reader, &glob) {
+            Ok(pcals) => pcals,
+            Err(e) => { return respond_bad_request(e); },
+        };
+
+        for p in pcals.iter_mut() {
+            if &p.teacher.base.uname == tuname {
+                goals.append(&mut p.goals);
+            } else {
+                others_students.push('\n');
+                others_students.push_str(&p.student.base.uname);
+            }
+        }
+
+        if !others_students.is_empty() {
+            let mut estr = String::from(
+                "The following students with Goals in the Goals file you just submitted are not yours:"
+            );
+            estr.extend(others_students.drain(..));
+
+            return (
+                StatusCode::FORBIDDEN,
+                estr
+            ).into_response();
+        }
+
+        match glob.insert_goals(&goals).await {
+            Ok(n) => {
+                log::trace!("{} inserted {} goals.", tuname, &n);
+            },
+            Err(e) => {
+                log::error!(
+                    "Error inserting Goals: {}", &e
+                );
+                return text_500(Some(format!(
+                    "Error inserting Goals into database: {}", &e
+                )));
+            },
+        }
+    }
+
+    populate_goals(headers, glob).await
 }

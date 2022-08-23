@@ -194,6 +194,9 @@ impl Store {
     ) -> Result<(), DbError> {
         log::trace!("Store::delete_user( {:?} ) called.", uname);
 
+        let n_goals = self.delete_goals_by_student(t, uname).await?;
+        log::trace!("Deleted {} Goals.", &n_goals);
+
         /*
         JFC the type annotations here.
 

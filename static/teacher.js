@@ -16,6 +16,7 @@ const DISPLAY = {
     course_list_genl: document.querySelector("table#genl-courses > tbody"),
     course_list_hs: document.querySelector("table#hs-courses > tbody"),
     calbox: document.getElementById("cals"),
+    upload_goals: document.getElementById("upload-goals-dialog"),
     goal_edit: document.getElementById("edit-goal"),
     goal_edit_meta: document.getElementById("edit-goal-meta"),
     course_input: document.getElementById("edit-goal-course"),
@@ -172,10 +173,10 @@ function toggle_extra(evt) {
 
     if(extra.style.display == "table-row") {
         extra.style.display = "none";
-        UTIL.set_text(lab, "+ more +");
+        UTIL.set_text(lab, "\u2304 more \u2304");
     } else {
         extra.style.display = "table-row";
-        UTIL.set_text(lab, "- less -");
+        UTIL.set_text(lab, "\u2303 less \u2303");
     }
 }
 
@@ -233,9 +234,13 @@ function make_calendar_footer(cal) {
     const last_div = document.createElement("div");
     const autobutt = document.createElement("button");
     UTIL.label("autopace", autobutt);
+    autobutt.setAttribute("data-uname", cal.uname);
+    autobutt.addEventListener("click", autopace);
     last_div.appendChild(autobutt);
     const nuke = document.createElement("button");
     UTIL.label("clear all goals", nuke);
+    nuke.setAttribute("data-uname", cal.uname);
+    nuke.addEventListener("click", clear_goals);
     last_div.appendChild(nuke);
     ex_td.appendChild(last_div);
 
@@ -501,7 +506,7 @@ function make_calendar_table(cal) {
     const expbutt = document.createElement("button");
     expbutt.setAttribute("data-uname", cal.uname);
     expbutt.setAttribute("class", "expander");
-    UTIL.label("+ more +", expbutt);
+    UTIL.label("\u2304 more \u2304", expbutt);
     expbutt.addEventListener("click", toggle_extra);
     more_div.appendChild(expbutt);
     const addbutt = document.createElement("button");
@@ -735,6 +740,35 @@ Now we get to the editing.
 
 
 */
+
+document.getElementById("upload-goals")
+    .addEventListener("click", () => {
+        DISPLAY.upload_goals.showModal();
+    })
+
+function upload_goals_submit(evt) {
+    evt.preventDefault();
+    const form = document.forms["upload-goals"];
+    const data = new FormData(form);
+    const file = data.get("file");
+
+    UTIL.get_file_as_text(file)
+    .then(text => {
+        DISPLAY.upload_goals.close();
+        request_action("upload-goals", text, "Uploading new goals.");
+    })
+    .catch(err => {
+        RQ.add_err(`Error opening local file: ${err}`);
+    });
+}
+
+document.getElementById("upload-goals-confirm")
+    .addEventListener("click", upload_goals_submit);
+document.getElementById("upload-goals-cancel")
+    .addEventListener("click", evt => {
+        evt.preventDefault();
+        DISPLAY.upload_goals.close();
+    });
 
 function populate_seq_list(evt) {
     const list = document.getElementById("course-seqs");
@@ -992,9 +1026,29 @@ function update_numbers_submit(evt) {
         if(interpret_score(sex)) {
             cal.sex = sex;
         } else {
-            RQ.add_ErR(`"${sex}" is not a valid Spring Exam score.`);
+            RQ.add_err(`${sex} is not a valid Spring Exam score.`);
         }
     }
 
-    request_action("update-numbers", cal, `Updating scores for ${cal.first} ${cal.rest}`);
+    request_action("update-numbers", cal, `Updating scores for ${cal.first} ${cal.rest}.`);
+}
+
+async function autopace(evt) {
+    evt.preventDefault();
+    const uname = this.getAttribute("data-uname");
+    const cal = DATA.paces.get(uname);
+    const q = `This operation will probably change all due dates for ${cal.rest} ${cal.last}.`;
+    if(await are_you_sure(q)) {
+        request_action("autopace", uname, `Autopacing due dates for ${cal.rest} ${cal.last}.`);
+    }
+}
+
+async function clear_goals(evt) {
+    evt.preventDefault();
+    const uname = this.getAttribute("data-uname");
+    const cal = DATA.paces.get(uname);
+    const q = `This operation will totally and unrecoverably nuke the calendar for ${cal.rest} ${cal.last}.`;
+    if(await are_you_sure(q)) {
+        request_action("clear-goals", uname, `Clearing goals for ${cal.rest} ${cal.last}.`);
+    }
 }
