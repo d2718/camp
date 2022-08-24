@@ -51,6 +51,7 @@ async fn handle_login(
 
     match user {
         User::Admin(a) => inter::admin::login(a, form, glob.clone()).await,
+        User::Boss(b) => inter::boss::login(b ,form, glob.clone()).await,
         User::Teacher(t) => inter::teacher::login(t, form, glob.clone()).await,
         _ => {
             let data = json!({

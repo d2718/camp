@@ -5,6 +5,7 @@ Interoperation between the client (user) and server.
 */
 use std::{
     fmt::{Debug, Display},
+    io::Write,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -30,6 +31,7 @@ pub mod boss;
 pub mod teacher;
 
 static TEMPLATES: OnceCell<Handlebars> = OnceCell::new();
+static RAW_TEMPLATES: OnceCell<Handlebars> = OnceCell::new();
 
 static HTML_500: &str = r#"<!doctype html>
 <html>
@@ -105,6 +107,26 @@ pub fn init<P: AsRef<Path>>(template_dir: P) -> Result<(), String> {
             }
             estr
         })?;
+    
+    let mut r = Handlebars::new();
+    #[cfg(debug_assertions)]
+    r.set_dev_mode(true);
+    r.register_templates_directory(".html", template_dir)
+        .map_err(|e| format!(
+            "Error registering templates directory {}: {}",
+            template_dir.display(), &e
+        ))?;
+    r.register_escape_fn(handlebars::no_escape);
+
+    RAW_TEMPLATES.set(r)
+        .map_err(|old_h| {
+            let mut estr = String::from("Templates directory already registered w/templates:");
+            for template_name in old_h.get_templates().keys() {
+                estr.push('\n');
+                estr.push_str(template_name.as_str());
+            }
+            estr
+        })?;
 
     Ok(())
 }
@@ -135,6 +157,39 @@ pub fn text_500(text: Option<String>) -> Response {
     }
 }
 
+pub fn render_template<T: Serialize>(
+    name: &str,
+    data: &T
+) -> Result<String, String> {
+    TEMPLATES.get().unwrap().render(name, data)
+        .map_err(|e| format!(
+            "Error rendering template {:?}: {}", name, &e
+        ))
+}
+
+pub fn write_template<T: Serialize, W: Write>(
+    name: &str,
+    data: &T,
+    writer: W
+) -> Result<(), String> {
+    TEMPLATES.get().unwrap().render_to_write(name, data, writer)
+        .map_err(|e| format!(
+            "Error rendering template {:?}: {}", name, &e
+        ))
+}
+
+pub fn write_raw_template<T: Serialize, W: Write>(
+    name: &str,
+    data: &T,
+    writer: W
+) -> Result<(), String> {
+    RAW_TEMPLATES.get().unwrap().render_to_write(name, data, writer)
+        .map_err(|e| format!(
+            "Error rendering template {:?}: {}", name, &e
+        ))
+}
+
+
 pub fn serve_template<S>(
     code: StatusCode,
     template_name: &str,
@@ -147,6 +202,32 @@ where
     log::trace!("serve_template( {}, {:?}, ... ) called.", &code, template_name);
 
     match TEMPLATES.get().unwrap().render(template_name, data) {
+        Ok(response_body) => (
+            code,
+            Html(response_body)
+        ).add_headers(addl_headers),
+        Err(e) => {
+            log::error!(
+                "Error rendering template {:?} with data {:?}:\n{}",
+                template_name, data, &e
+            );
+            html_500()
+        },
+    }
+}
+
+pub fn serve_raw_template<S>(
+    code: StatusCode,
+    template_name: &str,
+    data: &S,
+    addl_headers: Vec<(HeaderName, HeaderValue)>
+) -> Response
+where
+    S: Serialize + Debug
+{
+    log::trace!("serve_raw_template( {}, {:?}, ... ) called.", &code, template_name);
+
+    match RAW_TEMPLATES.get().unwrap().render(template_name, data) {
         Ok(response_body) => (
             code,
             Html(response_body)
@@ -185,18 +266,27 @@ pub fn serve_static<P: AsRef<std::path::Path>>(
     ).add_headers(addl_headers)
 }
 
-pub fn respond_bad_password() -> Response {
-    log::trace!("respond_bad_password() called.");
+pub fn respond_login_error(code: StatusCode, msg: &str) -> Response {
+    log::trace!("respond_login_error( {:?} ) called.", msg);
 
     let data = json!({
-        "error_message": "Invalid username/password combination."
+        "error_message": msg
     });
 
     serve_template(
-        StatusCode::UNAUTHORIZED,
+        code,
         "login_error",
         &data,
         vec![]
+    )
+}
+
+pub fn respond_bad_password() -> Response {
+    log::trace!("respond_bad_password() called.");
+
+    respond_login_error(
+        StatusCode::UNAUTHORIZED,
+        "Invalid username/password combination."
     )
 }
 

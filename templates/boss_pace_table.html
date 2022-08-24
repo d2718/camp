@@ -1,0 +1,17 @@
+<table class="{{ table_class }}" data-uname="{{ uname }}"
+       data-tname="{{ teacher }}" data-lag="{{ lag }}">
+    <thead>
+        <tr><td colspan="6"><div class="head">
+            <span title="{{ uname }}">{{ name }}</span>
+            <span>done {{ n_done }} / {{ n_due }} due ( {{ lag }}% )</span>
+            </span>
+        </div></td></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <th>course</th><th>chapter</th><th>R/I</th>
+            <th>due</th><th>done</th><th>score</th>
+        </tr>
+        {{ rows }}
+    </tbody>
+</table>

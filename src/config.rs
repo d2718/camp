@@ -763,6 +763,7 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
 
     glob.refresh_dates().await?;
     log::info!("Retrieved {} special dates from data DB.", glob.dates.len());
+    log::debug!("special dates:\n{:#?}\n", &glob.dates);
 
     inter::init(&cfg.templates_dir)?;
 
