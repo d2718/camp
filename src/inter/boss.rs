@@ -1,6 +1,8 @@
 /*!
 Subcrate for generation of "Boss" page.
 */
+use core::fmt::Write as CoreWrite;
+use std::io::Write as IoWrite;
 use std::sync::Arc;
 
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -23,6 +25,7 @@ use crate::{
 use super::*;
 
 type SMALLSTORE = [u8; 16];
+type MEDSTORE = [u8; 32];
 
 const DATE_FMT: &[FormatItem] = format_description!("[month repr:short] [day]");
 
@@ -93,6 +96,7 @@ pub async fn login(
 #[derive(Serialize)]
 struct GoalData<'a> {
     row_class: &'a str,
+    row_bad: &'a str,
     course: &'a str,
     book: &'a str,
     chapter: &'a str,
@@ -105,13 +109,15 @@ struct GoalData<'a> {
 
 #[derive(Serialize)]
 struct PaceData<'a> {
-    table_class: &'a str,
-    name: String,
+    table_class: SmallString<MEDSTORE>,
     uname: &'a str,
+    name: String,
+    tuname: &'a str,
     teacher: &'a str,
     n_done: usize,
     n_due: usize,
     lag: i32,
+    lagstr: SmallString<SMALLSTORE>,
     rows: String,
 }
 
@@ -250,7 +256,7 @@ fn write_cal_table<W: Write>(
 
         let row_class = match &g.due {
             Some(due) => match &g.done {
-                Some(done) => if due > done {
+                Some(done) => if due < done {
                     "late"
                 } else {
                     "done"
@@ -267,8 +273,14 @@ fn write_cal_table<W: Write>(
             }
         };
 
+        let row_bad = if g.incomplete && g.done.is_none() {
+            " bad"
+        } else {
+            ""
+        };
+
         let data = GoalData {
-            row_class, course, book, chapter,
+            row_class, row_bad, course, book, chapter,
             review, incomplete, due, done ,score
         };
 
@@ -281,24 +293,33 @@ fn write_cal_table<W: Write>(
 
     let name = format!("{}, {}", &p.student.last, &p.student.rest);
     let uname = p.student.base.uname.as_str();
-    let teacher = p.teacher.base.uname.as_str();
+    let tuname = p.teacher.base.uname.as_str();
+    let teacher = p.teacher.name.as_str();
     let lag = if p.total_weight.abs() < 0.001 {
         0
     } else {
         (100.0 * (weight_done - weight_due) / p.total_weight).round() as i32
     };
+    let mut lagstr: SmallString<SMALLSTORE> = SmallString::new();
+    write!(&mut lagstr, "{:+}%", &lag).map_err(|e| format!("Error writing table: {}", &e))?;
+
     let rows = String::from_utf8(goals_buff)
         .map_err(|e| format!("Calendar rows not valid UTF-8: {}", &e))?;
     
-    let table_class = if prev_year_inc {
-        "incomplete"
-    } else {
-        ""
-    };
+    let mut table_class: SmallString<MEDSTORE> = SmallString::from_str("cal");
+    if prev_year_inc {
+        write!(&mut table_class, " inc").map_err(|e| format!("Error writing table: {}", &e))?;
+    }
+    if lag < 0 {
+        write!(&mut table_class, " lag").map_err(|e| format!("Error writing table: {}", &e))?;
+    }
+    if n_done < n_due {
+        write!(&mut table_class, " count").map_err(|e| format!("Error writing table: {}", &e))?;
+    }
     
     let data = PaceData {
-        table_class, name, uname, teacher,
-        n_done, n_due, lag, rows
+        table_class, uname, name, tuname, teacher,
+        n_done, n_due, lag, lagstr, rows
     };
 
     write_raw_template("boss_pace_table", &data, &mut buff)

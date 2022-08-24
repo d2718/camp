@@ -1,0 +1,87 @@
+* {
+    border: 0; margin: 0; padding: 0;
+    box-sizing: border-box;
+}
+
+body { width: 100vw; padding: 1em; }
+div.center { text-align: center; }
+ul { padding-left: 2em; }
+p { text-align: justify; }
+kbd { font-family: Anka, monospace; }
+.bad { color: #822; }
+
+div#header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1em; gap: 1em;
+    background-color: #ddd;
+}
+
+div#controls {
+    display: inline-flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1em;
+}
+div#controls button {
+    border: 1px solid #888;
+    border-radius: 0.5em;
+    padding: 0.5em;
+    width: 12ex;
+}
+div#controls button label { font-family: monospace; }
+
+div#cals {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding: 1em; gap: 1em;
+    align-items: flex-start;
+}
+
+table.cal {
+    border-collapse: collapse;
+    font-size: smaller;
+    border: 1px solid #888;
+}
+
+div.head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0.5ex; gap: 1em;
+    background-color: #ddd;
+    cursor: pointer;
+}
+div.head > div {
+    display: flex;
+    gap: 0.5ex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+div.head > div:first-child { align-items: flex-start; }
+div.head > div:last-child  { align-items: flex-end; }
+div.head span.name { font-size: initial; }
+
+table.inc span.name { color: #822; }
+table.lag span.lag { color: #822; }
+table.count span.count { color: #822; }
+
+table.cal tbody { display: none; }
+
+tbody td,
+tbody th { padding: 2px 0.5ex; }
+td[title] { cursor: default; }
+tbody td:nth-child(3),
+tbody td:nth-child(4),
+tbody td:nth-child(5) { text-align: center; }
+tbody td:last-child { text-align: right; }
+
+tbody tr { border-bottom: 1px dotted #888; }
+tbody tr:last-child { border-bottom: none; }
+
+tbody tr.done    { background-color: #cfc; }
+tbody tr.late    { background-color: #ffc; }
+tbody tr.overdue { background-color: #fcc; }
+tbody tr.yet     { background-color: white; }
