@@ -47,3 +47,5 @@ document.getElementById("teacher").addEventListener("click",
 document.getElementById("lag").addEventListener("click",
     () => sort_tables([SORTS.name, SORTS.lag])
 );
+
+sort_tables([SORT.name]);

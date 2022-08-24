@@ -1,3 +1,12 @@
+@font-face {
+    font-family: "PT Sans";
+    src: url("/static/PT_Sans-Narrow-Web-Regular.woff2") format("woff2");
+}
+@font-face {
+    font-family: "mplus1m";
+    src: url("/static/mplus-1m-regular.woff2") format("woff2");
+}
+
 * {
     border: 0; margin: 0; padding: 0;
     box-sizing: border-box;
@@ -7,7 +16,7 @@ body { width: 100vw; padding: 1em; }
 div.center { text-align: center; }
 ul { padding-left: 2em; }
 p { text-align: justify; }
-kbd { font-family: Anka, monospace; }
+kbd { font-family: mplus1m, monospace; }
 .bad { color: #822; }
 
 div#header {
@@ -30,7 +39,7 @@ div#controls button {
     padding: 0.5em;
     width: 12ex;
 }
-div#controls button label { font-family: monospace; }
+div#controls button label { font-family: mplus1m, monospace; }
 
 div#cals {
     display: flex;
@@ -42,7 +51,7 @@ div#cals {
 
 table.cal {
     border-collapse: collapse;
-    font-size: smaller;
+    font-family: "PT Sans";
     border: 1px solid #888;
 }
 
@@ -62,7 +71,7 @@ div.head > div {
 }
 div.head > div:first-child { align-items: flex-start; }
 div.head > div:last-child  { align-items: flex-end; }
-div.head span.name { font-size: initial; }
+div.head span.name { font-size: larger; }
 
 table.inc span.name { color: #822; }
 table.lag span.lag { color: #822; }

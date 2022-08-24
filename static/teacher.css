@@ -1,10 +1,10 @@
 @font-face {
-    font-family: "Ristretto Slab";
-    src: url("/static/RistrettoSlabPro-Regular-webfont.woff2") format("woff2");
+    font-family: "PT Sans";
+    src: url("/static/PT_Sans-Narrow-Web-Regular.woff2") format("woff2");
 }
 @font-face {
-    font-family: "Anka";
-    src: url("/static/AnkaCoder-C75-r.woff2") format("woff2");
+    font-family: "mplus1m";
+    src: url("/static/mplus-1m-regular.woff2") format("woff2");
 }
 
 * {
@@ -16,7 +16,7 @@ body { width: 100vw; padding: 1em; }
 div.center { text-align: center; }
 ul { padding-left: 2em; }
 p { text-align: justify; }
-kbd { font-family: Anka, monospace; }
+kbd { font-family: mplus1m, monospace; }
 .bad { color: #822; }
 
 div#content-container { 
@@ -44,13 +44,14 @@ div#cals {
 }
 
 table.pace {
-    font-family: "Ristretto Slab", serif;
+    font-family: "PT Sans", serif;
     font-size: smaller;
     border-collapse: collapse;
 }
 table.pace tbody tr { border-bottom: 1px dotted #aaa; }
 table.pace tbody tr:last-child { border-bottom: none; }
 table.pace tbody td { padding: 0 0.5ex; }
+table.pace tbody td[title] { cursor: default; }
 table.pace tbody td.edit {
     display: flex;
     gap: 0.5ex;
@@ -58,7 +59,7 @@ table.pace tbody td.edit {
 table.pace tbody td.due,
 table.pace tbody td.done,
 table.pace tbody td.tries,
-table.pace tbody td.score { font-family: Anka, monospace; }
+table.pace tbody td.score { font-family: mplus1m, monospace; }
 table.pace tbody td.tries,
 table.pace tbody td.score { text-align: right; }
 
@@ -66,7 +67,7 @@ table.pace tbody tr.semsum { background-color: #ccc; }
 table.pace tbody tr.semsum td:first-child { text-align: right; }
 table.pace tbody tr.semsum td:last-child {
     text-align: left;
-    font-family: Anka;
+    font-family: mplus1m, monospace;
 }
 
 table.pace thead { background-color: #ccc; }
@@ -151,7 +152,7 @@ div#course-info table {
 div#course-info td { padding: 0.2ex 0.5ex; }
 div#course-info tbody tr:nth-child(odd) { background-color: #ccc; }
 div#course-info td:first-child {
-    font-family: Anka, monospace;
+    font-family: mplus1m, monospace;
     font-size: initial;
     text-align: right;
     padding-right: 1ex;
