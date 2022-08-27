@@ -11,7 +11,7 @@ use axum::{
     middleware,
     response::{IntoResponse, Response},
     Router,
-    routing::{get_service, post},
+    routing::{get, get_service, post},
 };
 use serde_json::json;
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
@@ -45,7 +45,7 @@ async fn handle_login(
         let glob = glob.read().await;
         match glob.users.get(&form.uname) {
             Some(u) => u.clone(),
-            None => { return inter::respond_bad_password(); }
+            None => { return inter::respond_bad_password(&form.uname); }
         }
     };
 
@@ -53,18 +53,7 @@ async fn handle_login(
         User::Admin(a) => inter::admin::login(a, form, glob.clone()).await,
         User::Boss(b) => inter::boss::login(b ,form, glob.clone()).await,
         User::Teacher(t) => inter::teacher::login(t, form, glob.clone()).await,
-        _ => {
-            let data = json!({
-                "error_message": "You attempted to log in, but logging in is currently unimplemented."
-            });
-
-            inter::serve_template(
-                StatusCode::NOT_IMPLEMENTED,
-                "login_error",
-                &data,
-                vec![]
-            )
-        },
+        User::Student(s) => inter::student::login(s, form, glob.clone()).await,
     }
 }
 
@@ -96,6 +85,7 @@ async fn main() {
         .route("/teacher", post(inter::teacher::api))
         .layer(middleware::from_fn(inter::key_authenticate))
         .layer(middleware::from_fn(inter::request_identity))
+        .route("/pwd", get(inter::password_reset))
         .route("/login", post(handle_login))
         .layer(Extension(glob.clone()))
         .nest("/static", serve_static)

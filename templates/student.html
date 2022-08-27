@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>CAMP | {{ name }}</title>
+        <link rel="stylesheet" href="/static/student.css">
+        <link rel="icon" type="image/png" hre="/static/camp_icon.png">
+    </head>
+    <div id="header">
+        <h1>Camelot Academy Math Pace</h1>
+        <p>Online Mathematics Progress Tracking Tool</p>
+    </div>
+    <div id="content">
+        <h2>{{ name }}</h2>
+        <div id="names">
+            <span>user name <kbd>{{ uname }}</kbd></span>
+            <span>Teacher: {{ teacher }}</span>
+        </div>
+        <div id="counts">
+            goals/chapters/topics done: {{ n_done }} / {{ n_due }} due
+        </div>
+
+        <table>
+            <thead>
+                <th>course</th><th>chapter</th><th>due</th>
+                <th>done</th><th>tries</th><th>score</th>
+            </thead>
+            <tbody>
+                {{ rows }}
+            </tbody>
+        </table>
+
+        <div id="ri"><ul>
+            <li>{{ rev_foot }}</li>
+            <li>{{ inc_foot }}</li>
+        </ul></div>
+    </div>
+</html>

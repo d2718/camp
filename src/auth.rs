@@ -358,6 +358,22 @@ impl Db {
             },
         }
     }
+
+    pub async fn issue_key(&self, uname: &str) -> Result<AuthResult, DbError> {
+        log::trace!("Db::issue_key( {:?} ) called.", uname);
+
+        let key = self.generate_key();
+        let client = self.connect().await?;
+        if let Err(e) = client.execute(
+            "INSERT INTO keys (uname, key, last_used)
+            VALUES ($1, $2, CURRENT_TIMESTAMP)",
+            &[&uname, &key]
+        ).await {
+            return Err(e.into())
+        }
+
+        Ok(AuthResult::Key(key))
+    }
     
     /**
     Check whether the provided `(uname, password, salt)` combination is valid,

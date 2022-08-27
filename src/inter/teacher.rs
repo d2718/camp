@@ -65,14 +65,14 @@ pub async fn login(
             return html_500();
         },
         Ok(AuthResult::Key(k)) => k,
-        Ok(AuthResult::BadPassword) => { return respond_bad_password(); },
+        Ok(AuthResult::BadPassword) => { return respond_bad_password(&t.base.uname); },
         Ok(x) => {
             log::warn!(
                 "auth::Db::check_password_and_issue_key( {:?}, {:?}. {:?} returned {:?}, which shouldn't ever happen.",
                 &t.base.uname, &form.password, &t.base.salt, &x
             );
 
-            return respond_bad_password();
+            return respond_bad_password(&t.base.uname);
         },
     };
 

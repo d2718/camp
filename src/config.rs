@@ -30,6 +30,7 @@ struct ConfigFile {
     admin_uname: Option<String>,
     admin_password: Option<String>,
     admin_email: Option<String>,
+    sendgrid_auth_string: String,
     host: Option<String>,
     port: Option<u16>,
     templates_dir: Option<String>,
@@ -44,6 +45,7 @@ pub struct Cfg {
     pub default_admin_uname: String,
     pub default_admin_password: String,
     pub default_admin_email: String,
+    pub sendgrid_auth_string: String,
     pub addr: SocketAddr,
     pub templates_dir: PathBuf,
     pub students_per_teacher: usize,
@@ -58,6 +60,7 @@ impl std::default::Default for Cfg {
             default_admin_uname: "root".to_owned(),
             default_admin_password: "toot" .to_owned(),
             default_admin_email: "admin@camp.not.an.address".to_owned(),
+            sendgrid_auth_string: "".to_owned(),
             addr: SocketAddr::new(
                 "0.0.0.0".parse().unwrap(),
                 8001
@@ -78,6 +81,7 @@ impl Cfg {
             .map_err(|e| format!("Unable to deserialize config file: {}", &e))?;
         
         let mut c = Self::default();
+        c.sendgrid_auth_string = cf.sendgrid_auth_string;
 
         if let Some(s) = cf.auth_db_connect_string {
             c.auth_db_connect_string = s;
@@ -120,6 +124,7 @@ This guy will haul around some global variables and be passed in an
 pub struct Glob {
     auth: Arc<RwLock<auth::Db>>,
     data: Arc<RwLock<Store>>,
+    pub sendgrid_auth: String,
     pub calendar: Vec<Date>,
     pub dates: HashMap<String, Date>,
     pub courses: HashMap<i64, Course>,
@@ -742,6 +747,7 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
     let mut glob = Glob {
         auth: Arc::new(RwLock::new(auth_db)),
         data: Arc::new(RwLock::new(data_db)),
+        sendgrid_auth: cfg.sendgrid_auth_string,
         dates: HashMap::new(),
         calendar: Vec::new(),
         courses: HashMap::new(),

@@ -6,19 +6,12 @@ body {
     text-align: center;
 }
 
-form#login {
-    display: grid;
-    margin-left: auto; margin-right: auto;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto;
+div#column {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    align-items: center;
 }
-
-form#login > * {
-    align-self: center;
-    margin: 0.5ex;
-}
-form#login > *:nth-child(odd) { justify-self: end; }
-form#login > *:nth-child(even) { justify-self: start; }
 
 div#login-error {
     display: block;
@@ -29,6 +22,39 @@ div#login-error {
     border: 1ex solid #820;
     border-radius: 1ex;
     text-align: justify;
+}
+
+form#login {
+    display: inline-grid;
+    margin-left: auto; margin-right: auto;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+}
+
+form#forgot {
+    display: none;
+    margin-left: auto; margin-right: auto;
+    grid-template-columns: 1fr 2fr;
+    grid-template-rows: auto;
+}
+
+form.twocol > * {
+    align-self: center;
+    margin: 0.5ex;
+}
+form.twocol > *:nth-child(odd) { justify-self: end; }
+form.twocol > *:nth-child(even) { justify-self: start; }
+
+p#forgot-link {
+    cursor: pointer;
+    text-decoration: underline dotted #48c;
+}
+p#forgot-link:hover { text-decoration: underline; }
+
+p#forgot-instructions {
+    display: none;
+    text-align: justify;
+    max-width: 60ex;
 }
 
 div#footer {
