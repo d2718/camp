@@ -12,6 +12,7 @@ use std::{
 
 use axum::{
     body::{Bytes, Full},
+    Extension,
     http::{header, Request, StatusCode},
     http::header::{HeaderMap, HeaderName, HeaderValue},
     middleware::{self, Next},
@@ -23,14 +24,19 @@ use serde::Serialize;
 use serde_json::json;
 use tokio::sync::RwLock;
 
-use crate::auth::AuthResult;
-use crate::config::Glob;
+use crate::{
+    auth::AuthResult,
+    config::Glob,
+    user::User,
+};
 
 pub mod admin;
 pub mod boss;
+pub mod student;
 pub mod teacher;
 
 static TEMPLATES: OnceCell<Handlebars> = OnceCell::new();
+static JSON_TEMPLATES: OnceCell<Handlebars> = OnceCell::new();
 static RAW_TEMPLATES: OnceCell<Handlebars> = OnceCell::new();
 
 static HTML_500: &str = r#"<!doctype html>
@@ -71,6 +77,18 @@ pub struct LoginData {
     pub password: String,
 }
 
+fn escape_json(s: &str) -> String {
+    let mut output = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => output.push_str(r#"\\"#),
+            '"' => output.push_str(r#"\""#),
+            _ => output.push(c),
+        }
+    }
+    output
+}
+
 /**
 Initializes the resources used in this module. This function should be called
 before any functionality of this module or any of its submodules is used.
@@ -102,6 +120,26 @@ pub fn init<P: AsRef<Path>>(template_dir: P) -> Result<(), String> {
         .map_err(|old_h| {
             let mut estr = String::from("Templates directory already registered w/templates:");
             for template_name in old_h.get_templates().keys() {
+                estr.push('\n');
+                estr.push_str(template_name.as_str());
+            }
+            estr
+        })?;
+    
+    let mut j = Handlebars::new();
+    #[cfg(debug_assertions)]
+    j.set_dev_mode(true);
+    j.register_templates_directory(".json", template_dir)
+        .map_err(|e| format!(
+            "Error registering templates directory {}: {}",
+            template_dir.display(), &e
+        ))?;
+    j.register_escape_fn(escape_json);
+    
+    JSON_TEMPLATES.set(j)
+        .map_err(|old_j| {
+            let mut estr = String::from("Templates directory already registered w/templates:");
+            for template_name in old_j.get_templates().keys() {
                 estr.push('\n');
                 estr.push_str(template_name.as_str());
             }
@@ -189,6 +227,26 @@ pub fn write_raw_template<T: Serialize, W: Write>(
         ))
 }
 
+pub fn render_json_template<T: Serialize>(
+    name: &str,
+    data: &T
+) -> Result<String, String> {
+    JSON_TEMPLATES.get().unwrap().render(name, data)
+        .map_err(|e| format!(
+            "Error rendering template: {:?}: {}", name, &e
+        ))
+}
+
+pub fn write_json_template<T: Serialize, W: Write>(
+    name: &str,
+    data: &T,
+    writer: W
+) -> Result<(), String> {
+    JSON_TEMPLATES.get().unwrap().render_to_write(name, data, writer)
+        .map_err(|e| format!(
+            "Error rendering template {:?}: {}", name, &e
+        ))
+}
 
 pub fn serve_template<S>(
     code: StatusCode,
@@ -281,12 +339,19 @@ pub fn respond_login_error(code: StatusCode, msg: &str) -> Response {
     )
 }
 
-pub fn respond_bad_password() -> Response {
-    log::trace!("respond_bad_password() called.");
+pub fn respond_bad_password(uname: &str) -> Response {
+    log::trace!("respond_bad_password( {:?} ) called.", uname);
 
-    respond_login_error(
+    let data = json!({
+        "error_message": "Invalid username/password combination.",
+        "uname": uname,
+    });
+
+    serve_template(
         StatusCode::UNAUTHORIZED,
-        "Invalid username/password combination."
+        "bad_password",
+        &data,
+        vec![]
     )
 }
 
@@ -412,4 +477,237 @@ pub async fn key_authenticate<B>(
     }
 
     next.run(req).await
+}
+
+pub async fn make_sendgrid_request(
+    json_body: String,
+    glob: &Glob
+) -> Result<(), String> {
+    use hyper::{Body, Client, Method, Request, Uri};
+
+    log::trace!("make_sendgrid_request( [ {} bytes of body ] ) called.", json_body.len());
+
+    let target_uri: Uri = "https://api.sendgrid.com/v3/mail/send".parse()
+        .map_err(|e| format!("Error parsing target URI: {}", &e))?;
+    let https = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .https_only()
+        .enable_http1()
+        .build();
+    let client: Client<_, hyper::Body> = Client::builder().build(https);
+
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(target_uri)
+        .header("Authorization", &glob.sendgrid_auth)
+        .header("Content-Type", "application/json")
+        .body(Body::from(json_body))
+        .map_err(|e| format!("Error building sendgrid request: {}", &e))?;
+    
+    let resp = client.request(req).await.map_err(|e| format!(
+        "Error from sendgrid request: {}", &e
+    )).map_err(|e| format!("Error sending sendgrid request: {}", &e))?;
+
+    log::debug!("{:?}", resp.status());
+
+    if resp.status() == 202 {
+        Ok(())
+    } else {
+        Err(format!("Sendgrid returned {} response (expected 202).", &resp.status()))
+    }
+}
+
+pub async fn generate_email(
+    u: &User,
+    glob: &Glob
+) -> Response {
+    let key = match glob.auth().read().await.issue_key(u.uname()).await {
+        Err(e) => {
+            log::error!(
+                "auth::Db::issue_key( {:?} ) returned {:?}", u.uname(), &e
+            );
+            return text_500(None);
+        },
+        Ok(AuthResult::Key(k)) => k,
+        Ok(x) => {
+            log::warn!(
+                "auth::Db::issue_key( {:?} ) returned {:?}, which shouldn't happen.",
+                u.uname(), &x
+            );
+            return text_500(None);
+        },
+    };
+
+    let data = match u {
+        User::Student(ref s) => json!({
+            "name": format!("{} {}", &s.rest, &s.last),
+            "uname":  u.uname(),
+            "email": u.email(),
+            "parent": &s.parent,
+            "key": &key,
+        }),
+        User::Teacher(ref t) => json!({
+            "name": &t.name,
+            "uname": u.uname(),
+            "email": u.email(),
+            "key": &key,
+        }),
+        User::Admin(_) | User::Boss(_) => json!({
+            "name": u.uname(),
+            "uname": u.uname(),
+            "email": u.email(),
+            "key": &key,
+        }),
+    };
+
+    let render_res = match u {
+        User::Student(_) => render_json_template("student_password_email", &data),
+        _ => render_json_template("password_email", &data),
+    };
+
+    let body = match render_res {
+        Err(e) => {
+            log::error!(
+                "Error rendering email template for {:?}: {}", u, &e
+            );
+            return text_500(Some("Error generating email.".to_owned()));
+        },
+        Ok(body) => body,
+    };
+
+    match make_sendgrid_request(body, glob).await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(e) => {
+            log::error!(
+                "Error with Sendgrid request: {}", &e
+            );
+            text_500(Some("Error generating email.".to_owned()))
+        }
+    }
+}
+
+pub async fn update_password(
+    u: &User,
+    headers: &HeaderMap,
+    glob: &Glob
+) -> Response {
+    let key = match headers.get("x-camp-key") {
+        Some(k_val) => match k_val.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!(
+                    "Failed converting x-camp-key header value {:?} to &str: {}",
+                    k_val, &e
+                );
+                return text_500(None);
+            },
+        },
+        None => { return respond_bad_request(
+            "Request must have an x-camp-key header.".to_owned()
+        ); },
+    };
+
+    let new_pwd = match headers.get("x-camp-password") {
+        Some(p_val) => match p_val.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!(
+                    "Failed converting x-camp-password header value {:?} to &str: {}",
+                    p_val, &e
+                );
+                return text_500(None);
+            },
+        },
+        None => { return respond_bad_request(
+            "Request must have an x-camp-password header.".to_owned()
+        );  },
+    };
+
+    let auth = glob.auth();
+    let auth_handle = auth.read().await;
+
+    match auth_handle.check_key(u.uname(), key).await {
+        Err(e) => {
+            log::error!(
+                "auth::Db::check_key( {:?}, {:?} ) error: {}", u.uname(), key, &e
+            );
+            return text_500(None);
+        },
+        Ok(AuthResult::InvalidKey) => { return respond_bad_key(); },
+        Ok(AuthResult::Ok) => { /* This is the happy path; proceed. */ },
+        Ok(x) => {
+            log::warn!(
+                "auth::Db::check_key( {:?}. {:?} ) returned {:?}, which shouldn't happen.",
+                u.uname(), key, &x
+            );
+            return text_500(None);
+        }
+    }
+
+    match auth_handle.set_password(u.uname(), new_pwd, u.salt()).await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(e) => {
+            log::error!(
+                "auth::Db::set_password( {:?}, {:?}, {:?} ) error: {}",
+                u.uname(), new_pwd, u.salt(), &e
+            );
+            text_500(None)
+        },
+    }
+}
+
+pub async fn password_reset(
+    headers: HeaderMap,
+    Extension(glob): Extension<Arc<RwLock<Glob>>>
+) -> Response {
+
+    let uname = match headers.get("x-camp-uname") {
+        Some(u_val) => match u_val.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!(
+                    "Failed converting x-camp-uname header value {:?} to &str: {}",
+                    u_val, &e
+                );
+                return text_500(None);
+            },
+        },
+        None => {
+            return respond_bad_request(
+                "Request must have an x-camp-uname header.".to_owned()
+            );
+        },
+    };
+
+    let action = match headers.get("x-camp-action") {
+        Some(a_val) => match a_val.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!(
+                    "Failed converting x-camp-action header value {:?} to &str: {}",
+                    a_val, &e
+                );
+                return text_500(None);
+            },
+        },
+        None => {
+            return respond_bad_request(
+                "Request must have an x-camp-action header.".to_owned()
+            );
+        },
+    };
+
+    let glob = glob.read().await;
+    let u = match glob.users.get(uname) {
+        Some(u) => u,
+        None => { return StatusCode::OK.into_response(); },
+    };
+
+    match action {
+        "request-email" => generate_email(u, &glob).await,
+        "reset-password" => update_password(u, &headers, &glob).await,
+        x => respond_bad_request(
+            format!("Unrecognized or invalid x-camp-action value: {:?}", &x)
+        ),
+    }
 }

@@ -60,13 +60,13 @@ pub async fn login(
             return html_500();
         },
         Ok(AuthResult::Ok) => { /* This is the happy path. */},
-        Ok(AuthResult::BadPassword) => { return respond_bad_password(); },
+        Ok(AuthResult::BadPassword) => { return respond_bad_password(&base.uname); },
         Ok(x) => {
             log::warn!(
                 "auth::Db::check_password( {:?}, {:?}, {:?} ) returned {:?}, which shouldn't happen.",
                 &base.uname, &form.password, &base.salt, &x
             );
-            return respond_bad_password();
+            return respond_bad_password(&base.uname);
         },
     }
 

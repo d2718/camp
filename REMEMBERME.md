@@ -16,3 +16,6 @@ Generate random passwords on insertion of new users.
 
 Admin and Teacher HTML pages need browser currency check to make sure
 Dialog::showModal() works.
+
+User names, names, course titles, and chapter titles may not contain
+the characters `&"<>`.

@@ -37,6 +37,7 @@ div#progress > ul > li,
 div#error > ul > li {
     font-family: monospace;
     white-space: pre-wrap;
+    text-align: left;
 }
 
 dialog#are-you-sure {
