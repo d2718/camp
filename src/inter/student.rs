@@ -10,6 +10,7 @@ use time::{
 
 use crate::{
     user::Student,
+    pace::maybe_parse_score_str,
 };
 
 use super::*;
@@ -56,6 +57,91 @@ pub async fn login(
             );
             return respond_bad_password(&s.base.uname);
         },
+    }
+
+    let p = match glob.get_pace_by_student(&s.base.uname).await {
+        Ok(p) => p,
+        Err(e) => {
+            log::error!(
+                "Glob::get_pace_by_student( {:?} ) error: {}",
+                &s.base.uname, &e
+            );
+            return html_500();
+        },
+    };
+
+    let today = crate::now();
+    let semf_end = match glob.dates.get("end-fall") {
+        Some(d) => d,
+        None => {
+            log::error!("Date \"end-fall\" not set by Admin.");
+            return html_500();
+        },
+    };
+
+    let mut need_inc_footnote = false;
+    let mut need_rev_footnote = false;
+    let mut semf_inc = false;
+    let mut sems_inc = false;
+    let mut n_done: usize = 0;
+    let mut n_due: usize = 0;
+    let mut semf_total: f32 = 0.0;
+    let mut semf_done: usize = 0;
+    let mut sems_total: f32 = 0.0;
+    let mut sems_done: usize = 0;
+    let mut semf_last_id: Option<i64> = None;
+    let mut sems_last_id: Option<i64> = None;
+    
+
+
+    for g in p.goals.iter() {
+        if let Some(d) = &g.due {
+            if d < &today {
+                n_due += 1;
+            }
+            if let &None = &g.done {
+                if d < &semf_end {
+                    semf_inc = true;
+                } else {
+                    sems_inc = true;
+                }
+            }
+        }
+
+        if let Some(d) = &g.done {
+            let score = match maybe_parse_score_str(g.score.as_deref()) {
+                Err(e) => {
+                    log::error!(
+                        "Error parsing stored score {:?}: {}", &g.score, &e
+                    );
+                    return html_500();
+                },
+                Ok(Some(f)) => f,
+                Ok(None) => {
+                    log::error!(
+                        "Goal [ id {} ] has done date but no score.", g.id
+                    );
+                    return html_500();
+                },
+            };
+
+            if d < &semf_end {
+                semf_total += score;
+                semf_done += 1;
+                semf_last_id = Some(g.id);
+            } else {
+                sems_total += score;
+                sems_done += 1;
+                sems_last_id = Some(g.id);
+            }
+        }
+
+        if g.incomplete {
+            need_inc_footnote = true;
+        }
+        if g.review {
+            need_rev_footnote = true;
+        }
     }
 
     (
