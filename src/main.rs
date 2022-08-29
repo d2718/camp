@@ -13,7 +13,6 @@ use axum::{
     Router,
     routing::{get, get_service, post},
 };
-use serde_json::json;
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::RwLock;
 use tower_http::{

@@ -106,7 +106,7 @@ pub fn log_level_from_env() -> simplelog::LevelFilter {
     simplelog::LevelFilter::max()
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct MiniString<A: smallvec::Array<Item = u8>>(SmallString<A>);
 
 impl<A: smallvec::Array<Item = u8>> MiniString<A> {

@@ -1,6 +1,8 @@
 /*!
 Displaying individual student calendars.
 */
+use std::ops::Deref;
+
 use smallstr::SmallString;
 use smallvec::SmallVec;
 use time::{
@@ -18,6 +20,7 @@ use crate::{
 use super::*;
 
 type SMALLSTORE = [u8; 16];
+type MEDSTORE = [u8; 32];
 
 const DATE_FMT: &[FormatItem] = format_description!("[month repr:short] [day]");
 
@@ -33,7 +36,7 @@ static TEMP_RESPONSE: &str = r#"<!doctype html>
 </body>
 </html>"#;
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct GoalData<'a> {
     course: &'a str,
     book: &'a str,
@@ -47,6 +50,28 @@ struct GoalData<'a> {
     tries: Option<i16>,
     score: Option<u32>,
     goal_class: &'a str,
+}
+
+#[derive(Debug, Serialize)]
+struct SummaryData<'a> {
+    text: &'a str,
+    score: MiniString<SMALLSTORE>    
+}
+
+enum Sem {
+    Fall,
+    Spring
+}
+
+impl Deref for Sem {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Sem::Fall => "Fall",
+            Sem::Spring => "Spring",
+        }
+    }
 }
 
 pub fn write_goal_row<W: Write>(
@@ -155,6 +180,100 @@ pub fn write_goal_row<W: Write>(
         ))
 }
 
+fn write_summary(
+    buff: &mut Vec<u8>,
+    sem: Sem,
+    test_avg: f32,
+    sem_inc: bool,
+    s: &Student
+) -> Result<(), String> {
+    let mut label: MiniString<MEDSTORE> = MiniString::new();
+    write!(&mut label, "{} Test Average:", sem.deref()).map_err(|e| format!(
+        "Error writing label: {}", &e
+    ))?;
+    let mut score: MiniString<SMALLSTORE> = MiniString::new();
+    let int_avg = (100.0 * test_avg).round() as i32;
+    write!(&mut score, "{}%", &int_avg).map_err(|e| format!(
+        "Error writing score {:?}: {}", &int_avg, &e
+    ))?;
+    if sem_inc {
+        write!(&mut score, " (I)").map_err(|e| format!(
+            "Error writing to score string: {}", &e
+        ))?;
+    }
+    let data = SummaryData{ text: label.as_str(), score };
+    write_template("summary_row", &data, &mut *buff).map_err(|e| format!(
+        "Error writing summary row w/data {:?}: {}", &data, &e
+    ))?;
+
+    // If there's an exam score, write the rest of the summary data.
+    let maybe_score = match sem {
+        Sem::Fall => &s.fall_exam,
+        Sem::Spring => &s.spring_exam,
+    };
+    if let Some(f) = maybe_parse_score_str(maybe_score.as_deref())? {
+        let int_score = (100.0 * f).round() as i32;
+        let mut score: MiniString<SMALLSTORE> = MiniString::new();
+        write!(&mut score, "{}%", &int_score).map_err(|e| format!(
+            "Error writing score {:?}: {}", &int_score, &e
+        ))?;
+        let data = SummaryData{ text: "Final Exam:", score };
+        write_template("summary_row", &data, &mut *buff).map_err(|e| format!(
+            "Error writing summary row w/data {:?}: {}", &data, &e
+        ))?;
+
+        let exam_frac = match sem {
+            Sem::Fall => s.fall_exam_fraction,
+            Sem::Spring => s.spring_exam_fraction,
+        };
+        let sem_final = (exam_frac * f) + ((1.0 - exam_frac) * test_avg);
+        let mut sem_pct = 100.0 * sem_final;
+
+        // Only write notices row if there are notices.
+        let notices = match sem {
+            Sem::Fall => s.fall_notices,
+            Sem::Spring => s.spring_notices,
+        };
+        if notices > 0 {
+            let mut label: MiniString<MEDSTORE> = MiniString::new();
+            write!(&mut label, "Notices ({}):", &notices).map_err(|e| format!(
+                "Error writing label: {}", &e
+            ))?;
+            let mut score: MiniString<SMALLSTORE> = MiniString::new();
+            write!(&mut score, "-{}%", &notices).map_err(|e| format!(
+                "Error writing notices # {:?}: {}", &notices, &e
+            ))?;
+            let data = SummaryData{ text: label.deref(), score };
+            write_template("summary_row", &data, &mut *buff).map_err(|e| format!(
+                "Error writing summary row w/data {:?}: {}", &data, &e
+            ))?;
+
+            sem_pct = sem_pct - (notices as f32);
+        }
+
+        let int_pct = sem_pct.round() as i32;
+        let mut label: MiniString<MEDSTORE> = MiniString::new();
+        write!(&mut label, "{} Semester Grade:", sem.deref()).map_err(|e| format!(
+            "Error writing label: {}", &e
+        ))?;
+        let mut score: MiniString<SMALLSTORE> = MiniString::new();
+        write!(&mut score, "{}%", &int_pct).map_err(|e| format!(
+            "Error writing score {:?}: {}", &sem_pct, &e
+        ))?;
+        if sem_inc {
+            write!(&mut score, " (I)").map_err(|e| format!(
+                "Error writing to score string: {}", &e
+            ))?;
+        }
+        let data = SummaryData{ text: label.as_str(), score };
+        write_template("summary_row", &data, &mut *buff).map_err(|e| format!(
+            "Error writing summary row w/data {:?}: {}", &data, &e
+        ))?;
+    }
+
+    Ok(())
+}
+
 pub async fn login(
     s: Student,
     form: LoginData,
@@ -211,6 +330,7 @@ pub async fn login(
     let mut sems_inc = false;
     let mut n_done: usize = 0;
     let mut n_due: usize = 0;
+    let mut n_scheduled: usize = 0;
     let mut semf_total: f32 = 0.0;
     let mut semf_done: usize = 0;
     let mut sems_total: f32 = 0.0;
@@ -230,6 +350,7 @@ pub async fn login(
                     sems_inc = true;
                 }
             }
+            n_scheduled += 1;
         }
 
         if let Some(d) = &g.done {
@@ -279,6 +400,28 @@ pub async fn login(
             );
             return html_500();
         }
+
+        // Write Fall Semester summary data, if applicable.
+        if let Some(id) = semf_last_id {
+            if id == g.id && semf_done > 0 {
+                let semf_frac = semf_total / (semf_done as f32);
+                if let Err(e) = write_summary(&mut goals_buff, Sem::Fall, semf_frac, semf_inc, &s) {
+                    log::error!("Error generating Fall summary: {}", &e);
+                    return html_500();
+                }
+            }
+        }
+
+        // Write Spring Semester summary data, if applicable.
+        if let Some(id) = sems_last_id {
+            if id == g.id && sems_done > 0 {
+                let sems_frac = sems_total / (sems_done as f32);
+                if let Err(e) = write_summary(&mut goals_buff, Sem::Spring, sems_frac, sems_inc, &s) {
+                    log::error!("Error generating Spring summary: {}", &e);
+                    return html_500();
+                }            
+            }
+        }
     }
 
     let rows = unsafe { String::from_utf8_unchecked(goals_buff) };
@@ -301,6 +444,7 @@ pub async fn login(
         "temail": &p.teacher.base.email,
         "n_done": n_done,
         "n_due": n_due,
+        "n_total": n_scheduled,
         "rows": rows,
         "rev_foot": rev_foot,
         "inc_foot": inc_foot,
