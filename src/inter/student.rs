@@ -12,7 +12,7 @@ use time::{
 use crate::{
     MiniString,
     user::Student,
-    pace::maybe_parse_score_str,
+    pace::{Goal, maybe_parse_score_str, Pace, Source},
 };
 
 use super::*;
@@ -40,11 +40,11 @@ struct GoalData<'a> {
     chapter: &'a str,
     subject: &'a str,
     ri: &'a str,
-    due: MiniString<SMALLSTORE>
+    due: MiniString<SMALLSTORE>,
     due_from: MiniString<SMALLSTORE>,
     done: MiniString<SMALLSTORE>,
     done_from: MiniString<SMALLSTORE>,
-    tries: Option<i16>
+    tries: Option<i16>,
     score: Option<u32>,
     goal_class: &'a str,
 }
@@ -60,7 +60,7 @@ pub fn write_goal_row<W: Write>(
         _ => { return Err("Custom Goals not supported.".to_owned()); },
     };
 
-    let crs = match glob.courses.get(&source.sym) {
+    let crs = match glob.course_by_sym(&source.sym) {
         Some(crs) => crs,
         None => { return Err(format!("No course with symbol {:?}.", &source.sym)); },
     };
@@ -73,21 +73,86 @@ pub fn write_goal_row<W: Write>(
         )); },
     };
 
+    let course = crs.title.as_str();
+    let book = crs.book.as_str();
+    let chapter = chp.title.as_str();
+    let subject = match &chp.subject {
+        Some(s) => s.as_str(),
+        None => "",
+    };
+
     let ri = match (g.review, g.incomplete) {
         (false, false) => "",
-        (true, false) => "R*",
-        (false, true) => "I*",
-        (true, true) => "R* I*",
+        (true, false) => " R*",
+        (false, true) => " I*",
+        (true, true) => " R* I*",
     };
 
     let mut due: MiniString<SMALLSTORE> = MiniString::new();
     let mut due_from: MiniString<SMALLSTORE> = MiniString::new();
     let mut done: MiniString<SMALLSTORE> = MiniString::new();
     let mut done_from: MiniString<SMALLSTORE> = MiniString::new();
+    let mut goal_class = "";
 
+    if let Some(d) = &g.due {
+        d.format_into(&mut due, &DATE_FMT).map_err(|e| format!(
+            "Failed to format date {:?}: {}", d, &e
+        ))?;
+        let delta = (*d - *today).whole_days();
+        if delta > 0 {
+            write!(&mut due_from, "in {} days", &delta).map_err(|e| e.to_string())?;
+        } else if delta < 0 {
+            write!(&mut due_from, "{} days ago", -delta).map_err(|e| e.to_string())?;
+        } else {
+            write!(&mut due_from, "today").map_err(|e| e.to_string())?;
+        }
+
+        if let Some(n) = &g.done {
+            n.format_into(&mut done, &DATE_FMT).map_err(|e| format!(
+                "Failed to format date {:?}: {}", n, &e
+            ))?;
+            let delta = (*d - *n).whole_days();
+            if delta > 0 {
+                write!(&mut done_from, "{} days early", &delta).map_err(|e| e.to_string())?;
+                goal_class = "done";
+            } else if delta < 0 {
+                write!(&mut done_from, "{} days late", -delta).map_err(|e| e.to_string())?;
+                goal_class = "late";
+            } else {
+                write!(&mut done_from, "on time").map_err(|e| e.to_string())?;
+                goal_class = "done";
+            }
+        } else {
+            if today > d {
+                goal_class = "overdue";
+            } else {
+                goal_class = "yet";
+            }
+        }
+    } else {
+        if let Some(n) = &g.done {
+            n.format_into(&mut done, &DATE_FMT).map_err(|e| format!(
+                "Failed to format date {:?}: {}", n, &e
+            ))?;
+            goal_class = "done";
+        } else {
+            goal_class = "yet";
+        }
+    }
+
+    let tries = g.tries;
+    let score =  maybe_parse_score_str(g.score.as_deref())?
+        .map(|f| (f * 100.0).round() as u32 );
     
+    let data = GoalData {
+        course, book, chapter, subject, ri, due, due_from,
+        done, done_from, tries, score, goal_class
+    };
 
-
+    write_template("student_goal_row", &data, w)
+        .map_err(|e| format!(
+            "Error writing goal {:?}: {}", g, &e
+        ))
 }
 
 pub async fn login(
@@ -193,6 +258,8 @@ pub async fn login(
                 sems_done += 1;
                 sems_last_id = Some(g.id);
             }
+
+            n_done += 1;
         }
 
         if g.incomplete {
@@ -203,15 +270,46 @@ pub async fn login(
         }
     }
 
-    let goals_buff: Vec<u8> = Vec::new();
+    let mut goals_buff: Vec<u8> = Vec::new();
 
     for g in p.goals.iter() {
-
+        if let Err(e) = write_goal_row(&mut goals_buff, g, &glob, &today) {
+            log::error!(
+                "Error writing Goal {:?} row: {}", g, &e
+            );
+            return html_500();
+        }
     }
 
+    let rows = unsafe { String::from_utf8_unchecked(goals_buff) };
 
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        Html(TEMP_RESPONSE)
-    ).into_response()
+    let rev_foot = if need_rev_footnote {
+        "*R indicates previously-completed material that requires review."
+    } else {
+        ""
+    };
+    let inc_foot = if need_inc_footnote {
+        "*I indicates material incomplete from the prior academic year."
+    } else {
+        ""
+    };
+
+    let data = json!({
+        "name": format!("{} {}", &s.rest, &s.last),
+        "uname": &s.base.uname,
+        "teacher": &p.teacher.name,
+        "temail": &p.teacher.base.email,
+        "n_done": n_done,
+        "n_due": n_due,
+        "rows": rows,
+        "rev_foot": rev_foot,
+        "inc_foot": inc_foot,
+    });
+
+    serve_raw_template(
+        StatusCode::OK,
+        "student",
+        &data,
+        vec![]
+    )
 }

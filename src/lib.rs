@@ -4,6 +4,7 @@
 use std::fmt::{Display, Write};
 
 use once_cell::sync::Lazy;
+use serde::Serialize;
 use smallstr::SmallString;
 use time::{
     Date,
@@ -105,10 +106,11 @@ pub fn log_level_from_env() -> simplelog::LevelFilter {
     simplelog::LevelFilter::max()
 }
 
-struct MiniString<A: smallvec::Array<Item = u8>>(SmallString<A>);
+#[derive(Serialize)]
+pub struct MiniString<A: smallvec::Array<Item = u8>>(SmallString<A>);
 
 impl<A: smallvec::Array<Item = u8>> MiniString<A> {
-    pub fn new() -> MiniString {
+    pub fn new() -> MiniString<A> {
         let inner: SmallString<A> = SmallString::new();
         MiniString(inner)
     }
@@ -128,14 +130,14 @@ impl<A: smallvec::Array<Item = u8>> std::io::Write for MiniString<A> {
 
         let str_buff = match std::str::from_utf8(buff) {
             Ok(s) => s,
-            Err(e) => {
+            Err(_) => {
                 return Err(Error::new(ErrorKind::InvalidData, "not valid UTF-8"));
             },
         };
 
         match self.0.write_str(str_buff) {
             Ok(()) => Ok(buff.len()),
-            Err(e) => Err(Error::new(ErrorKind::Other, "formatting failed")),
+            Err(_) => Err(Error::new(ErrorKind::Other, "formatting failed")),
         }
     }
 
