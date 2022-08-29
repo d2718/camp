@@ -2,6 +2,7 @@
 Displaying individual student calendars.
 */
 use smallstr::SmallString;
+use smallvec::SmallVec;
 use time::{
     Date,
     format_description::FormatItem,
@@ -9,11 +10,14 @@ use time::{
 };
 
 use crate::{
+    MiniString,
     user::Student,
     pace::maybe_parse_score_str,
 };
 
 use super::*;
+
+type SMALLSTORE = [u8; 16];
 
 const DATE_FMT: &[FormatItem] = format_description!("[month repr:short] [day]");
 
@@ -28,6 +32,63 @@ static TEMP_RESPONSE: &str = r#"<!doctype html>
     <p>Please come back at a later date.</p>
 </body>
 </html>"#;
+
+#[derive(Serialize)]
+struct GoalData<'a> {
+    course: &'a str,
+    book: &'a str,
+    chapter: &'a str,
+    subject: &'a str,
+    ri: &'a str,
+    due: MiniString<SMALLSTORE>
+    due_from: MiniString<SMALLSTORE>,
+    done: MiniString<SMALLSTORE>,
+    done_from: MiniString<SMALLSTORE>,
+    tries: Option<i16>
+    score: Option<u32>,
+    goal_class: &'a str,
+}
+
+pub fn write_goal_row<W: Write>(
+    w: W,
+    g: &Goal, 
+    glob: &Glob,
+    today: &Date,
+) -> Result<(), String> {
+    let source = match &g.source {
+        Source::Book(bch) => bch,
+        _ => { return Err("Custom Goals not supported.".to_owned()); },
+    };
+
+    let crs = match glob.courses.get(&source.sym) {
+        Some(crs) => crs,
+        None => { return Err(format!("No course with symbol {:?}.", &source.sym)); },
+    };
+
+    let chp = match crs.chapter(source.seq) {
+        Some(chp) => chp,
+        None => { return Err(format!(
+            "Course {:?} ({}, {}) has no chapter {}.",
+            &crs.sym, &crs.title, &crs.book, &source.seq
+        )); },
+    };
+
+    let ri = match (g.review, g.incomplete) {
+        (false, false) => "",
+        (true, false) => "R*",
+        (false, true) => "I*",
+        (true, true) => "R* I*",
+    };
+
+    let mut due: MiniString<SMALLSTORE> = MiniString::new();
+    let mut due_from: MiniString<SMALLSTORE> = MiniString::new();
+    let mut done: MiniString<SMALLSTORE> = MiniString::new();
+    let mut done_from: MiniString<SMALLSTORE> = MiniString::new();
+
+    
+
+
+}
 
 pub async fn login(
     s: Student,
@@ -91,8 +152,6 @@ pub async fn login(
     let mut sems_done: usize = 0;
     let mut semf_last_id: Option<i64> = None;
     let mut sems_last_id: Option<i64> = None;
-    
-
 
     for g in p.goals.iter() {
         if let Some(d) = &g.due {
@@ -143,6 +202,13 @@ pub async fn login(
             need_rev_footnote = true;
         }
     }
+
+    let goals_buff: Vec<u8> = Vec::new();
+
+    for g in p.goals.iter() {
+
+    }
+
 
     (
         StatusCode::NOT_IMPLEMENTED,

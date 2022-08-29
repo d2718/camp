@@ -4,7 +4,7 @@
 use std::fmt::{Display, Write};
 
 use once_cell::sync::Lazy;
-
+use smallstr::SmallString;
 use time::{
     Date,
     format_description::FormatItem,
@@ -103,6 +103,43 @@ pub fn log_level_from_env() -> simplelog::LevelFilter {
 #[cfg(windows)]
 pub fn log_level_from_env() -> simplelog::LevelFilter {
     simplelog::LevelFilter::max()
+}
+
+struct MiniString<A: smallvec::Array<Item = u8>>(SmallString<A>);
+
+impl<A: smallvec::Array<Item = u8>> MiniString<A> {
+    pub fn new() -> MiniString {
+        let inner: SmallString<A> = SmallString::new();
+        MiniString(inner)
+    }
+}
+
+impl<A: smallvec::Array<Item = u8>> std::ops::Deref for MiniString<A> {
+    type Target = SmallString<A>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<A: smallvec::Array<Item = u8>> std::io::Write for MiniString<A> {
+    fn write(&mut self, buff: &[u8]) -> std::io::Result<usize> {
+        use std::io::{Error, ErrorKind};
+
+        let str_buff = match std::str::from_utf8(buff) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(Error::new(ErrorKind::InvalidData, "not valid UTF-8"));
+            },
+        };
+
+        match self.0.write_str(str_buff) {
+            Ok(()) => Ok(buff.len()),
+            Err(e) => Err(Error::new(ErrorKind::Other, "formatting failed")),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
 }
 
 #[cfg(test)]
