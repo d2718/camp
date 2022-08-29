@@ -12,10 +12,12 @@ Slightly more granular "refreshment" and "repopulation" after altering
 `User`s, `Course`s, and `Chapter`s, instead of just rereading and
 resending _everything_.
 
-Generate random passwords on insertion of new users.
+~~Generate random passwords on insertion of new users.~~
 
 ~~Admin and Teacher HTML pages need browser currency check to make sure
 Dialog::showModal() works.~~
 
 User names, names, course titles, and chapter titles may not contain
 the characters `&"<>`.
+
+Widen "course symbol" input field in Admin's Edit Goal dialog.

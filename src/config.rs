@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use handlebars::Handlebars;
+use rand::{Rng, distributions};
 use serde::Deserialize;
 use time::Date;
 use tokio::sync::RwLock;
@@ -22,6 +23,9 @@ use crate::{
     UnifiedError,
     user::{BaseUser, Role, Student, Teacher, User},
 };
+
+const DEFAULT_PASSWORD_CHARS: &str =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-=_+[]{};':|,.<>/?`~";
 
 #[derive(Deserialize)]
 struct ConfigFile {
@@ -133,11 +137,21 @@ pub struct Glob {
     pub addr: SocketAddr,
     pub goals_per_student: usize,
     pub students_per_teacher: usize,
+    pub pwd_chars: Vec<char>,
 }
 
 impl<'a> Glob {
     pub fn auth(&self) -> Arc<RwLock<auth::Db>> { self.auth.clone() }
     pub fn data(&self) -> Arc<RwLock<Store>>    { self.data.clone() }
+
+    fn random_password(&self, length: usize) -> String {
+        let dist = distributions::Slice::new(&self.pwd_chars).unwrap();
+        let rng = rand::thread_rng();
+        let new_pwd: String = rng.sample_iter(&dist)
+            .take(length)
+            .collect();
+        new_pwd
+    }
 
     /// Retrieve all `User` data from the database and replace the contents
     /// of the current `.users` map with it.
@@ -228,11 +242,13 @@ impl<'a> Glob {
             }
         };
 
+        let new_password = self.random_password(32);
+
         {
             let auth = self.auth.read().await;
             let mut auth_client = auth.connect().await?;
             let auth_t = auth_client.transaction().await?;
-            auth.add_user(&auth_t, u.uname(), "new_password", &salt,).await?;
+            auth.add_user(&auth_t, u.uname(), &new_password, &salt,).await?;
             auth_t.commit().await?;
         }
 
@@ -285,12 +301,13 @@ impl<'a> Glob {
         log::trace!("Inserted {} Students into store.", &n_studs);
 
         let new_password = "this is a new password".to_owned();
+        let passwords: Vec<String> = students.iter().map(|_| self.random_password(32)).collect();
+        let mut pword_refs: Vec<&str> = passwords.iter().map(|s| s.as_str()).collect();
         let mut uname_refs: Vec<&str> = Vec::with_capacity(students.len());
         let mut pword_refs: Vec<&str> = Vec::with_capacity(students.len());
         let mut salt_refs:  Vec<&str> = Vec::with_capacity(students.len());
         for s in students.iter() {
             uname_refs.push(&s.base.uname);
-            pword_refs.push(&new_password);
             salt_refs.push(&s.base.salt);
         }
 
@@ -868,6 +885,7 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
         addr: cfg.addr,
         goals_per_student: cfg.goals_per_student,
         students_per_teacher: cfg.students_per_teacher,
+        pwd_chars: DEFAULT_PASSWORD_CHARS.chars().collect(),
     };
 
     glob.refresh_courses().await?;
