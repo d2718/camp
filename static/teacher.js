@@ -364,7 +364,7 @@ function add_grades_to_calendar(tab, cal) {
 
         const test_tr = document.createElement("tr");
         test_tr.setAttribute("class", "semsum");
-        let td = UTIL.text_td("Fall Test Average:");
+        let td = UTIL.text_td("Spring Test Average:");
         td.setAttribute("colspan", "5");
         test_tr.appendChild(td);
         let test_text = `${Math.round(test_pct)}%`;
@@ -379,7 +379,7 @@ function add_grades_to_calendar(tab, cal) {
         if(cal.sex) {
             const exam_tr = document.createElement("tr");
             exam_tr.setAttribute("class", "semsum");
-            let td = UTIL.text_td("Fall Final:");
+            let td = UTIL.text_td("Spring Final:");
             td.setAttribute("colspan", "5");
             exam_tr.appendChild(td);
             const exam_score = interpret_score(cal.sex) * 100;
@@ -408,7 +408,7 @@ function add_grades_to_calendar(tab, cal) {
 
             const sem_tr = document.createElement("tr");
             sem_tr.setAttribute("class", "semsum");
-            td = UTIL.text_td("Fall Semester Grade:");
+            td = UTIL.text_td("Spring Semester Grade:");
             td.setAttribute("colspan", "5");
             sem_tr.appendChild(td);
             let sem_text = `${Math.round(sem_grade)}%`;

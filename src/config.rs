@@ -455,6 +455,118 @@ impl<'a> Glob {
         return stud_refs;
     }
 
+    pub async fn delete_chapter(
+        &self,
+        id: i64
+    ) -> Result<(), UnifiedError> {
+        log::trace!("Glob::delete_chapter( {:?} ) called.", &id);
+
+        let data = self.data();
+        let data_read = data.read().await;
+        let mut client = data_read.connect().await?;
+        let t = client.transaction().await?;
+
+        let rows = t.query(
+            "WITH ch_data AS (
+                SELECT
+                    chapters.course AS crs_n,
+                    chapters.sequence AS ch_n,
+                    courses.sym AS sym,
+                    courses.title AS crs,
+                    courses.book AS book,
+                    chapters.title AS chp
+                FROM chapters
+                INNER JOIN courses ON
+                    courses.id = chapters.course
+                WHERE chapters.id = $1
+            )
+            SELECT
+                ch_data.crs_n, goals.sym, ch_data.ch_n, goals.uname,
+                ch_data.crs, ch_data.chp, ch_data.book
+            FROM goals INNER JOIN ch_data ON goals.sym = ch_data.sym",
+            &[&id]
+        ).await?;
+
+        if !rows.is_empty() {
+            let row = &rows[0];
+            log::debug!("{:?}", row);
+            let sym: String = row.try_get("sym")?;
+            let seq: i16 = row.try_get("seq")?;
+            let title: String = row.try_get("crs")?;
+            let chapter: String = row.try_get("chp")?;
+            let book: String = match row.try_get("book")? {
+                Some(s) => s,
+                None => String::from("[ no listed book ]"),
+            };
+            let mut unames: HashSet<String> = HashSet::with_capacity(rows.len());
+            for row in rows.iter() {
+                let uname: String = row.try_get("uname")?;
+                unames.insert(uname);
+            }
+
+            let mut estr = format!(
+                "Chapter ({:?}, {:?}) ({}, {} from {}) cannot be deleted because the following users have that Chapter as a Goal:\n",
+                &sym, &seq, &title, &chapter, &book
+            );
+            for uname in unames.iter() {
+                if let Some(User::Student(ref s)) = self.users.get(uname.as_str()) {
+                    writeln!(&mut estr, "{} ({}, {})", uname, &s.last, &s.rest)
+                        .map_err(|e| format!("Error generating error message: {}", &e))?;
+                }
+            }
+
+            return Err(estr.into());
+        }
+
+        t.execute("DELETE FROM chapters WHERE id = $1", &[&id]).await?;
+
+        t.commit().await.map_err(|e| format!("Error commiting transaction to delete Chapter w/id {}", &id))?;
+
+        Ok(())
+    }
+
+    pub async fn delete_course(
+        &self,
+        sym: &str
+    ) -> Result<(usize, usize), UnifiedError> {
+        log::trace!("Glob::delete_course( {:?} ) called.", sym);
+
+        let data = self.data();
+        let data_read = data.read().await;
+        let mut client = data_read.connect().await?;
+        let t = client.transaction().await?;
+
+        let rows = t.query(
+            "SELECT DISTINCT uname FROM goals WHERE sym = $1", &[&sym]
+        ).await?;
+
+        if !rows.is_empty() {
+            let crs = self.course_by_sym(sym).ok_or_else(|| format!(
+                "There is no course with symbol {:?}.", sym
+            ))?;
+            let mut estr = format!(
+                "The Course {:?} ({} from {}) cannot be deleted because the following users have Goals from that Course:\n",
+                sym, &crs.title, &crs.book
+            );
+            for row in rows.iter() {
+                let uname: &str = row.try_get("uname")?;
+                if let Some(User::Student(ref s)) = self.users.get(uname) {
+                    writeln!(&mut estr, "{} ({}, {})", uname, &s.last, &s.rest)
+                        .map_err(|e| format!("Error generating error message: {}", &e))?;
+                }
+            }
+
+            return Err(estr.into());
+        }
+
+        let tup = data_read.delete_course(&t, sym).await?;
+
+        match t.commit().await {
+            Ok(_) => Ok(tup),
+            Err(e) => Err(e.into())
+        }
+    }
+
     pub async fn insert_goals(
         &self,
         goals: &[Goal]

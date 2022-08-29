@@ -475,9 +475,7 @@ async fn delete_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respons
     };
 
     {
-        let glob = glob.read().await;
-        let data = glob.data();
-        match data.read().await.delete_course(&body).await {
+        match glob.read().await.delete_course(&body).await {
             Ok((n_crs, n_ch)) => {
                 log::trace!(
                     "Deleted {} Course, {} Chapters from Data DB.",
@@ -485,7 +483,7 @@ async fn delete_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respons
                 );
             },
             Err(e) => {
-                return text_500(Some(e.into()));
+                return text_500(Some(e.to_string().into()));
             },
         };
     }
@@ -543,15 +541,11 @@ async fn delete_chapter(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respon
         },
     };
 
-    {
-        let glob = glob.read().await;
-        let data = glob.data();
-        if let Err(e) = data.read().await.delete_chapter(ch_id).await {
-            return text_500(Some(format!(
-                "Unable to delete Chapter: {}", &e
-            )));
-        };
-    }
+    if let Err(e) = glob.read().await.delete_chapter(ch_id).await {
+        return text_500(Some(format!(
+            "Unable to delete Chapter: {}", &e
+        )));
+    };
 
     refresh_and_repopulate_courses(glob).await
 }

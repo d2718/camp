@@ -32,7 +32,7 @@ CREATE TABLE custom_chapters (
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use tokio_postgres::{Row, types::Type};
+use tokio_postgres::{Row, Transaction, types::Type};
 
 use super::{Store, DbError};
 use crate::course::{Course, Chapter};
@@ -226,12 +226,10 @@ impl Store {
 
     pub async fn delete_course(
         &self,
+        t: &Transaction<'_>,
         sym: &str
     ) -> Result<(usize, usize), DbError> {
         log::trace!("Store::delete_course( {:?} ) called.", sym);
-
-        let mut client = self.connect().await?;
-        let t = client.transaction().await?;
 
         let n_chapters = t.execute(
             "DELETE FROM chapters
@@ -248,11 +246,6 @@ impl Store {
             &[&sym]
         ).await?;
 
-        t.commit().await?;
-        log::trace!(
-            "{} Courses, {} Chapters successfully deleted.",
-            n_courses, n_chapters
-        );
         Ok((n_courses as usize, n_chapters as usize))
     }
 
