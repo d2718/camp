@@ -181,3 +181,5 @@ div#course-info-show img,
 div#course-info-hide img { width: 1.5em; }
 
 div#course-table-spacer { width: calc(1.5em + 3ex); }
+
+dialog#edit-goal input#edit-goal-course { width: 60ex; }

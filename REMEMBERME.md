@@ -20,4 +20,4 @@ Dialog::showModal() works.~~
 User names, names, course titles, and chapter titles may not contain
 the characters `&"<>`.
 
-Widen "course symbol" input field in Admin's Edit Goal dialog.
+~~Widen "course symbol" input field in Admin's Edit Goal dialog.~~
