@@ -39,6 +39,7 @@ static TEMPLATES: OnceCell<Handlebars> = OnceCell::new();
 static JSON_TEMPLATES: OnceCell<Handlebars> = OnceCell::new();
 static RAW_TEMPLATES: OnceCell<Handlebars> = OnceCell::new();
 
+
 static HTML_500: &str = r#"<!doctype html>
 <html>
 <head>

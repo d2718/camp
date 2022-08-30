@@ -17,7 +17,7 @@ resending _everything_.
 ~~Admin and Teacher HTML pages need browser currency check to make sure
 Dialog::showModal() works.~~
 
-User names, names, course titles, and chapter titles may not contain
-the characters `&"<>`.
+~~User names, names, course titles, and chapter titles may not contain
+the characters `&"<>`.~~
 
 ~~Widen "course symbol" input field in Admin's Edit Goal dialog.~~

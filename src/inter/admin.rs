@@ -378,9 +378,13 @@ async fn upload_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respons
         Ok(crs) => crs,
         Err(e) => { return respond_bad_request(e); },
     };
+    if let Err(e) = Glob::check_course_for_bad_chars(&crs) {
+        return respond_bad_request(e);
+    }
 
     {
         let glob = glob.read().await;
+
         let data = glob.data();
         match data.read().await.insert_courses(&vec![crs]).await {
             Ok((n_crs, n_ch)) => {
@@ -416,6 +420,9 @@ async fn add_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
             return text_500(Some("Unable to deserialize to Course struct.".to_owned()));
         },
     };
+    if let Err(e) = Glob::check_course_for_bad_chars(&crs) {
+        return respond_bad_request(e);
+    }
 
     {
         let glob = glob.read().await;
@@ -454,6 +461,9 @@ async fn update_course(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respons
             return text_500(Some("Unable to deserialize to Course struct.".to_owned()));
         },
     };
+    if let Err(e) = Glob::check_course_for_bad_chars(&crs) {
+        return respond_bad_request(e);
+    }
 
     {
         let glob = glob.read().await;
@@ -509,6 +519,12 @@ async fn add_chapters(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response
             return text_500(Some("Unable to deserialize to vector of Chapters.".to_owned()));
         }
     };
+
+    for ch in chapters.iter() {
+        if let Err(e) = Glob::check_chapter_for_bad_chars(ch) {
+            return respond_bad_request(e);
+        }
+    }
 
     {
         let glob = glob.read().await;
@@ -568,6 +584,10 @@ async fn update_chapter(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Respon
             return text_500(Some("Unable to deserialize to Chapter struct.".to_owned()));
         }
     };
+
+    if let Err(e) = Glob::check_chapter_for_bad_chars(&ch) {
+        return respond_bad_request(e);
+    }
 
     {
         let glob = glob.read().await;

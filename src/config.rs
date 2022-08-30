@@ -16,7 +16,7 @@ use tokio::sync::RwLock;
 
 use crate::{
     auth, auth::AuthResult,
-    course::Course,
+    course::{Chapter, Course},
     inter,
     pace::{BookCh, Goal, Pace, Source},
     store::Store,
@@ -26,6 +26,21 @@ use crate::{
 
 const DEFAULT_PASSWORD_CHARS: &str =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-=_+[]{};':|,.<>/?`~";
+
+static BAD_CHARS_MSG: &str = r#"cannot contain any of the following characters: <, >, &, ""#;
+
+fn has_bad_chars(text: &str) -> bool {
+    for b in text.as_bytes().iter() {
+        match b {
+            b'<' => { return true; },
+            b'>' => { return true; },
+            b'&' => { return true; },
+            b'"' => { return true; },
+            _ => {},
+        }
+    }
+    false
+}
 
 #[derive(Deserialize)]
 struct ConfigFile {
@@ -201,18 +216,55 @@ impl<'a> Glob {
         }
     }
 
+    pub fn check_course_for_bad_chars(crs: &Course) -> Result<(), String> {
+        if has_bad_chars(&crs.sym) {
+            return Err(format!("Course symbols {}", BAD_CHARS_MSG));
+        }
+        if has_bad_chars(&crs.title) {
+            return Err(format!("Course titles {}", BAD_CHARS_MSG));
+        }
+
+        for chp in crs.all_chapters() {
+            if has_bad_chars(&chp.title) {
+                return Err(format!("Chapter titles {}", BAD_CHARS_MSG));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn check_chapter_for_bad_chars(chp: &Chapter) -> Result<(), String> {
+        if has_bad_chars(&chp.title) {
+            return Err(format!("Chapter titles {}", BAD_CHARS_MSG));
+        }
+        Ok(())
+    }
+
     /// Insert the given user into both the auth and the data databases.
     /// 
     /// This takes advantage of the fact that it's necessary to insert into
     /// the data DB and get back a salt string before the user info can be
     /// inserted into the auth DB.
-    /// 
-    /// XXX TODO XXX
-    /// 
-    ///   * Generate random passwords upon insertion.
-    /// 
     pub async fn insert_user(&self, u: &User) -> Result<(), UnifiedError> {
         log::trace!("Glob::insert_user( {:?} ) called.", u);
+
+        if has_bad_chars(u.uname()) {
+            return Err(format!("unames {}", BAD_CHARS_MSG).into());
+        }
+
+        match u {
+            User::Teacher(ref t) => {
+                if has_bad_chars(&t.name) {
+                    return Err(format!("Names {}", BAD_CHARS_MSG).into());
+                }
+            },
+            User::Student(ref s) => {
+                if has_bad_chars(&s.last) || has_bad_chars(&s.rest) {
+                    return Err(format!("Names {}", BAD_CHARS_MSG).into());
+                }
+            },
+            _ => { /* We don't need to check anything else. */},
+        }
 
         let data = self.data.read().await;
         let mut client = data.connect().await?;
@@ -272,6 +324,10 @@ impl<'a> Glob {
         {
             let mut not_teachers: Vec<(&str, &str, &str)> = Vec::new();
             for s in students.iter() {
+                if has_bad_chars(&s.last) || has_bad_chars(&s.rest) {
+                    return Err(format!("Names {}", BAD_CHARS_MSG).into());
+                }
+
                 if let Some(User::Teacher(_)) = self.users.get(&s.teacher) {
                     /* This is the happy path. */
                 } else {
@@ -300,7 +356,6 @@ impl<'a> Glob {
         let n_studs = data.insert_students(&data_t, &mut students).await?;
         log::trace!("Inserted {} Students into store.", &n_studs);
 
-        let new_password = "this is a new password".to_owned();
         let passwords: Vec<String> = students.iter().map(|_| self.random_password(32)).collect();
         let mut pword_refs: Vec<&str> = passwords.iter().map(|s| s.as_str()).collect();
         let mut uname_refs: Vec<&str> = Vec::with_capacity(students.len());
@@ -334,6 +389,20 @@ impl<'a> Glob {
 
     pub async fn update_user(&self, u: &User) -> Result<(), UnifiedError> {
         log::trace!("Glob::update_user( {:?} ) called.", u);
+
+        match u {
+            User::Teacher(ref t) => {
+                if has_bad_chars(&t.name) {
+                    return Err(format!("Names {}", BAD_CHARS_MSG).into());
+                }
+            },
+            User::Student(ref s) => {
+                if has_bad_chars(&s.last) || has_bad_chars(&s.rest) {
+                    return Err(format!("Names {}", BAD_CHARS_MSG).into());
+                }
+            },
+            _ => { /* We don't need to check anything else. */}
+        }
 
         let data = self.data.read().await;
         let mut client = data.connect().await?;
