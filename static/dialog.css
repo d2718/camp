@@ -24,7 +24,7 @@ dialog > form {
 }
 dialog > form > *:nth-child(odd) { justify-self: end; }
 dialog > form >*:nth-child(even) { justify-self: start; }
-dialog > form label { white-space: pre; }
+dialog > form label { white-space: nowrap; }
 
 input { font-family: monospace; }
 input:invalid { background-color: #fcc; }

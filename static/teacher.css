@@ -29,10 +29,12 @@ div#headline {
     justify-content: space-between;
 }
 div#headline h1 { display: inline-block; }
+div#headline span { display: inline-block; }
 div#headline button {
     border: 1px solid #888;
     border-radius: 0.5ex;
     padding: 0 0.5ex;
+    height: 100%;
 }
 
 div#cals {
@@ -183,3 +185,10 @@ div#course-info-hide img { width: 1.5em; }
 div#course-table-spacer { width: calc(1.5em + 3ex); }
 
 dialog#edit-goal input#edit-goal-course { width: 60ex; }
+
+a[rel="help"] {
+    cursor: help;
+    text-decoration: none;
+}
+
+tr.more a[rel="help"] { display: none; }

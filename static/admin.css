@@ -79,3 +79,15 @@ button {
     border: 1px solid #234;
     border-radius: 0.5ex;
 }
+
+a[rel="help"] {
+    cursor: help;
+    text-decoration: none;
+}
+
+hr {
+    height: 1ex;
+    background-color: #ccc;
+    border: 1px solid #bbb;
+    margin: 1em 0 1ex 0;
+}

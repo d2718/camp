@@ -169,13 +169,16 @@ function toggle_extra(evt) {
     const tab = document.querySelector(`table.pace[data-uname="${uname}"]`);
     const extra = tab.querySelector("tr.extra");
     const butt = tab.querySelector("button.expander");
+    const link = tab.querySelector("tr.more a");
     const lab = butt.querySelector("label");
 
     if(extra.style.display == "table-row") {
         extra.style.display = "none";
+        link.style.display = "none";
         UTIL.set_text(lab, "\u2304 more \u2304");
     } else {
         extra.style.display = "table-row";
+        link.style.display = "inline";
         UTIL.set_text(lab, "\u2303 less \u2303");
     }
 }
@@ -509,6 +512,12 @@ function make_calendar_table(cal) {
     UTIL.label("\u2304 more \u2304", expbutt);
     expbutt.addEventListener("click", toggle_extra);
     more_div.appendChild(expbutt);
+    const help_a = document.createElement("a");
+    help_a.setAttribute("href", "/static/help/teacher.html#toc-footer");
+    help_a.setAttribute("rel", "help");
+    help_a.setAttribute("target", "_blank");
+    help_a.innerHTML = "&#x1f6c8;";
+    more_div.appendChild(help_a);
     const addbutt = document.createElement("button");
     addbutt.setAttribute("data-uname", cal.uname);
     UTIL.label("add goal \u229e", addbutt);

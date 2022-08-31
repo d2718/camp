@@ -601,27 +601,6 @@ document.getElementById("delete-student")
     .addEventListener("click", delete_student_submit);
 
 
-document.getElementById("paste-students")
-    .addEventListener("click", () => {
-        DISPLAY.student_paste.showModal(); 
-    });
-
-function paste_students_submit(evt) {
-    const area = document.getElementById("student-csv-content");
-    const data = area.value.trim();
-    if(data == "") {
-        RQ.add_err("Please enter some text before submitting.");
-        return;
-    }
-    DISPLAY.student_paste.close();
-    area.value = "";
-    request_action("upload-students", data, `Uploading new students...`);
-}
-
-document.getElementById("paste-students-confirm")
-    .addEventListener("click", paste_students_submit);
-
-
 document.getElementById("upload-students")
     .addEventListener("click", () => {
         DISPLAY.student_upload.showModal();
@@ -932,7 +911,7 @@ function populate_course_chapters(c) {
 
     const add_butt = document.createElement("button");
     add_butt.setAttribute("data-sym", sym);
-    UTIL.label("+ append chapter", add_butt);
+    UTIL.label("+ append Chapter", add_butt);
     add_butt.addEventListener("click", append_chapter)
     div.appendChild(add_butt);
 
@@ -1033,7 +1012,7 @@ function upload_course_submit(evt) {
     const data = new FormData(form);
     const file = data.get("file");
 
-    get_file_as_text(file)
+    UTIL.get_file_as_text(file)
     .then((text) => {
         DISPLAY.course_upload.close();
         request_action("upload-course", text, `Uploading new students...`);

@@ -88,7 +88,7 @@ const AUTH = {
             <div>
                 <button id="add-student"><label>add one Student</label></button>
                 <button id="upload-students"><label>upload CSV of Students</label></button>
-                <button id="paste-students"><label>paste CSV of Students</label></button>
+                <a href="/static/help/admin.html#toc-upload-students" rel="help" target="_blank">&#x1f6c8;</a>
             </div>
         </div>
     </div>
@@ -113,6 +113,7 @@ const AUTH = {
             <div>
                 <button id="add-course"><label>add new Course</label></button>
                 <button id="upload-course"><label>upload Course file</label></button>
+                <a href="/static/help/admin.html#toc-courses-upload" rel="help" target="_blank">&#x1f6c8;</a>
             </div>
         </div>
     </div>
@@ -124,7 +125,7 @@ const AUTH = {
     <label for="cal-tab-radio" tabindex="3">Calendar</label>
 
     <div id="cal-tab-content" class="tab-content">
-        <h2>Calendar</h2>
+        <h2>Calendar <a href="/static/help/admin.html#toc-cal" rel="help" target="_blank">&#x1f6c8;</a></h2>
 
         <form name="cal-dates" id="cal-dates-form">
             <table id="cal-dates">
@@ -177,7 +178,10 @@ const AUTH = {
         <dialog id="alter-admin" class="edit">
             <h1>Admin Details</h1>
             <form name="alter-admin" method="dialog">
-                <label for="alter-admin-uname">uname</label>
+                <label for="alter-admin-uname">
+                    <a href="/static/help/admin.html#toc-users-uname" rel="help" target="_blank">&#x1f6c8;</a>
+                    uname
+                </label>
                 <input name="uname" id="alter-admin-uname"
                        required pattern="^[a-zA-Z0-9]+$">
                 <label for="alter-admin-email">email</label>
@@ -201,7 +205,10 @@ const AUTH = {
         <dialog id="alter-boss" class="edit">
             <h1>Boss Details</h1>
             <form name="alter-boss", method="dialog">
-                <label for="alter-boss-uname">uname</label>
+                <label for="alter-boss-uname">
+                    <a href="/static/help/admin.html#toc-users-uname" rel="help" target="_blank">&#x1f6c8;</a>
+                    uname
+                </label>
                 <input name="uname" id="alter-boss-uname"
                        required pattern="^[a-zA-Z0-9]+$">
                 <label for="alter-boss-email">email</label>
@@ -225,7 +232,10 @@ const AUTH = {
         <dialog id="alter-teacher" class="edit">
             <h1>Teacher Details</h1>
             <form name="alter-teacher" method="dialog">
-                <label for="alter-teacher-uname">uname</label>
+                <label for="alter-teacher-uname">
+                    <a href="/static/help/admin.html#toc-users-uname" rel="help" target="_blank">&#x1f6c8;</a>
+                    uname
+                </label>
                 <input name="uname" id="alter-teacher-uname"
                        required pattern="^[a-zA-Z0-9]+$">
                 <label for="alter-teacher-email">email</label>
@@ -252,7 +262,10 @@ const AUTH = {
         <dialog id="alter-student" class="edit">
             <h1>Student Details</h1>
             <form name="alter-student" method="dialog">
-                <label for="alter-student-uname">uname</label>
+                <label for="alter-student-uname">
+                    <a href="/static/help/admin.html#toc-users-uname" rel="help" target="_blank">&#x1f6c8;</a>
+                    uname
+                </label>
                 <input name="uname" id="alter-student-uname"
                        required pattern="^[a-zA-Z0-9]+$">
                 <label for="alter-student-last">last</label>
@@ -265,7 +278,10 @@ const AUTH = {
                 <label for="alter-student-email">email</label>
                 <input type="email" name="email" id="alter-student-email"
                        required>
-                <label for="alter-student-parent">parent email</label>
+                <label for="alter-student-parent">
+                    <a href="/static/help/admin.html#toc-users-parent" rel="help" target="_blank">&#x1f6c8;</a>
+                    parent email
+                </label>
                 <input type="email" name="parent" id="alter-student-parent"
                        required>
                 <button id="alter-student-cancel">
@@ -297,21 +313,6 @@ const AUTH = {
             </form>
         </dialog>
 
-        <dialog id="paste-students-dialog" class="edit">
-            <h1>Paste CSV File of Students</h1>
-            <div class="center">
-                <textarea id="student-csv-content"></textarea>
-            </div>
-            <form name="paste-students" method="dialog">
-                <button id="paste-students-cancel">
-                    <label class="cancel">cancel</label>
-                </button>
-                <button id="paste-students-confirm">
-                    <label class="confirm">confirm</label>
-                </button>
-            </form>
-        </dialog>
-
         <dialog id="upload-course-dialog" class="edit">
             <h1>Upload Course File</h1>
             <form name="upload-course" method="dialog">
@@ -329,13 +330,18 @@ const AUTH = {
         <dialog id="alter-course" class="edit">
             <h1>Course Data</h1>
             <form name="alter-course" method="dialog">
-                <label for="alter-course-sym">sym</label>
+                <label for="alter-courses-sym">
+                    <a href="/static/help/admin.html#toc-courses-sym" rel="help" target="_blank">&#x1f6c8;</a>
+                    sym
+                </label>
                 <input name="sym" id="alter-course-id"
                        reqired pattern="^[a-zA-Z0-9]+$">
                 <label for="alter-course-title">course title</label>
                 <input name="title" id="alter-course-title"
                        required pattern=".*\S.*">
-                <label for="alter-course-level">level</label>
+                <label for="alter-course-level">
+                    <a href="/static/help/admin.html#toc-courses-level" rel="help" target="_blank">&#x1f6c8;</a>
+                    level</label>
                 <input type="number" name="level" id="alter-course-level"
                        min="0.000" max="15.000" step="0.0001" required>
                 <label for="alter-course-book">textbook</label>
@@ -361,11 +367,19 @@ const AUTH = {
                 <label for="alter-chapter-seq">chapter #</label>
                 <input type="number" name="seq" id="alter-chapter-seq"
                        step="1", min="0" required>
-                <label for="alter-chapter-title">title</label>
+                <label for="alter-chapter-title">
+                    <a href="/static/help/admin.html#toc-chapter-title" rel="help" target="_blank">&#x1f6c8;</a>
+                    title
+                </label>
                 <input name="title" id="alter-chapter-title">
-                <label for="alter-chapter-subject">subject</label>
+                <label for="alter-chapter-subject">
+                    <a href="/static/help/admin.html#toc-chapter-subject" rel="help" target="_blank">&#x1f6c8;</a>
+                    subject</label>
                 <input name="subject" id="alter-chapter-subject">
-                <label for="alter-chapter-weight">weight</label>
+                <label for="alter-chapter-weight">
+                    <a href="/static/help/admin.html#toc-chapter-weight" rel="help" target="_blank">&#x1f6c8;</a>
+                    weight
+                </label>
                 <input type="number" name="weight" id="alter-chapter=weight"
                        step="0.01", min="0.01" value="1.0">
                 <button id="alter-chapter-cancel">
