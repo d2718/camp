@@ -128,6 +128,21 @@ impl Cfg {
         if let Some(n) = cf.port {
             c.addr.set_port(n);
         }
+
+        if let Ok(port_str) = std::env::var("PORT") {
+            match port_str.parse::<u16>() {
+                Ok(n) => {
+                    log::info!("Using value of $PORT: {}", &n);
+                    c.addr.set_port(n);
+                },
+                Err(e) => {
+                    log::warn!(
+                        "Unable to parse $PORT {:?}: {}; using default or configured value.",
+                        &port_str, &e)
+                },
+            }
+        }
+
         if let Some(s) = cf.templates_dir {
             c.templates_dir = PathBuf::from(&s);
         }

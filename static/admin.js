@@ -460,7 +460,7 @@ function edit_teacher_submit() {
     if(uname_input.disabled) {
         request_action("update-user", u, `Updating user ${uname}...`);
     } else {
-        request_action("add-user", u, `Adding user $[uname]...`);
+        request_action("add-user", u, `Adding user ${uname}...`);
     }
 }
 

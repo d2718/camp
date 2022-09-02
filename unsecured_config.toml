@@ -1,0 +1,5 @@
+# Connects to Cloud SQL instance, but over unsecured public IP.
+
+auth_db_connect_string = "host=34.139.33.146 user=camper password='3263827' dbname=camp_auth"
+data_db_connect_string = "host=34.139.33.146 user=camper password='3263827' dbname=camp_store"
+sendgrid_auth_string = "Bearer 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"
