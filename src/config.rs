@@ -42,6 +42,20 @@ fn has_bad_chars(text: &str) -> bool {
     false
 }
 
+static BAD_UNAME_MSG: &str = "A uname can only contain alphanumeric ASCII characters: a-z, A-Z, or 0-9.";
+
+fn bad_uname(uname: &str) -> bool {
+    for b in uname.as_bytes().iter() {
+        if *b >= b'a' && *b <= b'z' { /* okay */ }
+        else if *b >= b'A' && *b <= b'Z' { /* okay */ }
+        else if *b >= b'0' && *b <= b'9' { /* okay */ }
+        else {
+            return true;
+        }
+    }
+    return false;
+}
+
 #[derive(Deserialize)]
 struct ConfigFile {
     auth_db_connect_string: Option<String>,
@@ -263,8 +277,8 @@ impl<'a> Glob {
     pub async fn insert_user(&self, u: &User) -> Result<(), UnifiedError> {
         log::trace!("Glob::insert_user( {:?} ) called.", u);
 
-        if has_bad_chars(u.uname()) {
-            return Err(format!("unames {}", BAD_CHARS_MSG).into());
+        if bad_uname(u.uname()) {
+            return Err(BAD_UNAME_MSG.to_string().into());
         }
 
         match u {
@@ -339,6 +353,9 @@ impl<'a> Glob {
         {
             let mut not_teachers: Vec<(&str, &str, &str)> = Vec::new();
             for s in students.iter() {
+                if bad_uname(&s.base.uname) {
+                    return Err(BAD_UNAME_MSG.to_string().into());
+                }
                 if has_bad_chars(&s.last) || has_bad_chars(&s.rest) {
                     return Err(format!("Names {}", BAD_CHARS_MSG).into());
                 }
