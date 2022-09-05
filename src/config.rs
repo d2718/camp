@@ -843,6 +843,39 @@ impl<'a> Glob {
 
         Ok(cals)
     }
+
+    /**
+    Delete all Goals and Students.
+
+    This is meant to clear the database out between academic years.
+    */
+    pub async fn yearly_data_nuke(&mut self) -> Result<(), UnifiedError> {
+        log::trace!("Glob::yearly_data_nuke() called.");
+
+        let data_arc = self.data();
+        let data = data_arc.read().await;
+        let mut client = data.connect().await?;
+        let t = client.transaction().await?;
+
+        let unames = data.delete_students(&t).await?;
+        let uname_refs: Vec<&str> = unames.iter()
+            .map(|s| s.as_str())
+            .collect();
+
+        let auth_arc = self.auth();
+        let auth = auth_arc.read().await;
+        let mut auth_client = auth.connect().await?;
+        let auth_t = auth_client.transaction().await?;
+
+        auth.delete_users(&auth_t, &uname_refs).await?;
+
+        t.commit().await?;
+
+        auth_t.commit().await.map_err(|e| format!(
+            "Error removing tranche of {} users from the Auth DB; Auth and Data DBs may be out of synch. The database may need manual attention from someone who understands databases. In any case, it is recommended to log back in before you continue.",
+            uname_refs.len()
+        ).into())
+    }
 }
 
 async fn insert_default_admin_into_data_db(

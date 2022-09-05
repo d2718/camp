@@ -909,6 +909,33 @@ This absolutely shouldn't be able to happen, but here we are.",
         log::trace!("    ...Store::get_user_by_uname() returns {:?}", &u);
         Ok(Some(u))
     }
+
+    /**
+    Delete all Student-oriented data: everything from the `goals` table, all
+    the `students` sidecar data, all the `users` with role `student`.
+
+    This is the inter-academic-year housecleaning function. It should return
+    a Vec of usernames that have been deleted, so they can be removed from the
+    auth database.
+    */
+    pub async fn delete_students(&self, t: &Transaction<'_>) -> Result<Vec<String>, DbError> {
+        log::trace!("Store::delete_students() called.");
+
+        t.execute("DELETE FROM goals", &[]).await?;
+        t.execute("DELETE FROM students", &[]).await?;
+        let uname_rows = t.query(
+            "DELETE FROM users WHERE role = 'Student'
+            RETURNING uname",
+            &[]
+        ).await?;
+
+        let mut unames: Vec<String> = Vec::new();
+        for row in uname_rows.iter() {
+            unames.push(row.try_get("uname")?);
+        }
+
+        Ok(unames)
+    }
 }
 
 #[cfg(test)]

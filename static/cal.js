@@ -136,7 +136,7 @@ CAL.populate_year = function(target_elt, year) {
 }
 
 CAL.repaint_dates = function() {
-    for(const td of CAL.target_div.querySelectorAll("td[data-date")) {
+    for(const td of CAL.target_div.querySelectorAll("td[data-date]")) {
         if(CAL.dates.has(td.getAttribute("data-date"))) {
             td.setAttribute("class","y");
         } else {

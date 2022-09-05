@@ -40,6 +40,7 @@ const DISPLAY = {
     course_edit:   document.getElementById("alter-course"),
     course_upload: document.getElementById("upload-course-dialog"),
     chapter_edit:  document.getElementById("alter-chapter"),
+    student_reset: document.getElementById("reset-students"),
 };
 
 function populate_users(r) {
@@ -1024,6 +1025,25 @@ function upload_course_submit(evt) {
 
 document.getElementById("upload-course-confirm")
     .addEventListener("click", upload_course_submit);
+
+document.getElementById("reset-students-button")
+    .addEventListener("click", () => {
+        DISPLAY.student_reset.showModal();
+    });
+document.getElementById("reset-students-cancel")
+    .addEventListener("click", (evt) => {
+        evt.preventDefault();
+        DISPLAY.student_reset.close();
+    });
+document.getElementById("reset-students-confirm")
+    .addEventListener("click", async function(evt) {
+        evt.preventDefault();
+        const q = "Are you sure you want to exercise the scorced-earth nuclear option on all student Goals and Student User records?";
+        if(await are_you_sure(q)) {
+            DISPLAY.student_reset.close();
+            request_action("reset-students", null, "Deleting all student data.")
+        }
+    });
 
 /*
 

@@ -90,6 +90,15 @@ const AUTH = {
                 <button id="upload-students"><label>upload CSV of Students</label></button>
                 <a href="/static/help/admin.html#toc-upload-students" rel="help" target="_blank">&#x1f6c8;</a>
             </div>
+            <div class="right">
+                <button id="reset-students-button" title="Delete all Goals and Student Users.">
+                    <label>
+                        <img src="/static/error.svg">
+                        clear all Student data
+                        <img src="/static/error.svg">
+                    </label>
+                </button>
+            </div>
         </div>
     </div>
 </li>
@@ -397,6 +406,22 @@ const AUTH = {
                     <label>delete this Chapter</label>
                 </button>
             </div>
+        </dialog>
+
+        <dialog id="reset-students" class="edit">
+            <h1>Delete all Student Data</h1>
+            <p>This will completely erase all student data: all pace goals,
+                all records of the students themselves. This is intended as
+                a sort of "reset button" to be used between academic years,
+                but you may not want to use it even then.</p>
+            <form name="reset-students" method="dialog">
+                <button id="reset-students-cancel">
+                    <label class="cancel">cancel</label>
+                </button>
+                <button id="reset-students-confirm">
+                    <label class="confirm">confirm</label>
+                </button>
+            </form>
         </dialog>
 
         <dialog id="are-you-sure">

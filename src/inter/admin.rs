@@ -139,6 +139,7 @@ pub async fn api(
         "update-cal" => update_calendar(body, glob.clone()).await,
         "populate-dates" => populate_dates(glob).await,
         "set-date" => set_date(body, glob.clone()).await,
+        "reset-students" => reset_students(glob.clone()).await,
         x => respond_bad_request(
             format!("{:?} is not a recognizable x-camp-action value.", x)
         ),
@@ -761,4 +762,23 @@ async fn set_date(body: Option<String>, glob: Arc<RwLock<Glob>>) -> Response {
     }
 
     populate_dates(glob).await
+}
+
+async fn reset_students(glob: Arc<RwLock<Glob>>) -> Response {
+    {
+        let mut glob = glob.write().await;
+
+        let res = glob.yearly_data_nuke().await;
+
+        if let Err(e) = glob.refresh_users().await {
+            let mut estr = format!("There was an error refreshing User data from the database: {}", &e);
+            if let Err(e) = res {
+                estr = format!("{}\n{}", &estr, &e);
+            }
+
+            return text_500(Some(estr));
+        }
+    }
+
+    populate_users(glob).await
 }

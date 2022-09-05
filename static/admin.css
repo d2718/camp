@@ -91,3 +91,11 @@ hr {
     border: 1px solid #bbb;
     margin: 1em 0 1ex 0;
 }
+
+div.right { text-align: right; }
+button#reset-students-button img { width: 1.5em; }
+button#reset-students-button label {
+    display: inline-flex;
+    align-items: center;
+    gap: 1ex;
+}
