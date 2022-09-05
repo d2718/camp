@@ -58,6 +58,7 @@ fn bad_uname(uname: &str) -> bool {
 
 #[derive(Deserialize)]
 struct ConfigFile {
+    uri: Option<String>,
     auth_db_connect_string: Option<String>,
     data_db_connect_string: Option<String>,
     admin_uname: Option<String>,
@@ -73,6 +74,7 @@ struct ConfigFile {
 
 #[derive(Debug)]
 pub struct Cfg {
+    pub uri: String,
     pub auth_db_connect_string: String,
     pub data_db_connect_string: String,
     pub default_admin_uname: String,
@@ -88,6 +90,7 @@ pub struct Cfg {
 impl std::default::Default for Cfg {
     fn default() -> Self {
         Self {
+            uri: "localhost:8001/".to_owned(),
             auth_db_connect_string: "host=localhost user=camp_test password='camp_test' dbname=camp_auth_test".to_owned(),
             data_db_connect_string: "host=localhost user=camp_test password='camp_test' dbname=camp_store_test".to_owned(),
             default_admin_uname: "root".to_owned(),
@@ -116,6 +119,9 @@ impl Cfg {
         let mut c = Self::default();
         c.sendgrid_auth_string = cf.sendgrid_auth_string;
 
+        if let Some(s) = cf.uri {
+            c.uri = s;
+        }
         if let Some(s) = cf.auth_db_connect_string {
             c.auth_db_connect_string = s;
         }
@@ -172,6 +178,7 @@ This guy will haul around some global variables and be passed in an
 pub struct Glob {
     auth: Arc<RwLock<auth::Db>>,
     data: Arc<RwLock<Store>>,
+    pub uri: String,
     pub sendgrid_auth: String,
     pub calendar: Vec<Date>,
     pub dates: HashMap<String, Date>,
@@ -1008,6 +1015,7 @@ pub async fn load_configuration<P: AsRef<Path>>(path: P)
     log::trace!("Default Admin OK in auth DB.");
 
     let mut glob = Glob {
+        uri: cfg.uri,
         auth: Arc::new(RwLock::new(auth_db)),
         data: Arc::new(RwLock::new(data_db)),
         sendgrid_auth: cfg.sendgrid_auth_string,
