@@ -1,20 +1,26 @@
 /*!
 The `Goal` struct and Pace calendars.
 */
+use core::ops::Deref;
 use std::{
     cmp::Ordering,
     collections::HashMap,
-    io::Read,
+    io::{Read, Write},
 };
 
+use smallstr::SmallString;
 use smallvec::SmallVec;
 use time::{Date, Month};
 
 use crate::{
     config::Glob,
     course::Course,
+    MiniString,
     user::{Student, Teacher, User},
 };
+
+type SMALLSTORE = [u8; 16];
+type MEDSTORE = [u8; 32];
 
 pub fn parse_score_str(score_str: &str) -> Result<f32, String> {
     let chunks: SmallVec<[f32; 2]> = score_str.split('/')
@@ -539,6 +545,359 @@ impl Pace {
     }
 }
 
+#[derive(Debug)]
+enum Sem {
+    Fall,
+    Spring
+}
+
+impl Deref for Sem {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Sem::Fall => "Fall",
+            Sem::Spring => "Spring",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum GoalStatus {
+    Done,
+    Late,
+    Overdue,
+    Yet,
+}
+
+#[derive(Debug)]
+pub struct GoalDisplay<'a> {
+    pub course: &'a str,
+    pub book: &'a str,
+    pub title: &'a str,
+    pub subject: Option<&'a str>,
+    pub rev: bool,
+    pub inc: bool,
+    pub due: Option<Date>,
+    pub done: Option<Date>,
+    pub tries: Option<i16>,
+    pub mark: MiniString<MEDSTORE>,
+    pub score: Option<f32>,
+    pub status: GoalStatus,
+}
+
+impl<'a> GoalDisplay<'a> {
+    fn from_goal(g: &'a Goal, glob: &'a Glob, today: &Date) -> Result<GoalDisplay<'a>, String> {
+        let bch = match &g.source {
+            Source::Book(bch) => bch,
+            _ => { return Err(format!("Goal {}: custom sources unsupported.", &g.id)); },
+        };
+
+        let crs = glob.course_by_sym(&bch.sym).ok_or_else(|| format!(
+            "Goal {}: no course with symbol {:?}.", &g.id, &bch.sym
+        ))?;
+        let chp = crs.chapter(bch.seq).ok_or_else(|| format!(
+            "Goal {}: Course {:?} has no Chapter {}", &g.id, &bch.sym, &bch.seq
+        ))?;
+
+        let mut mark: MiniString<MEDSTORE> = MiniString::new();
+        if let Some(s) = g.score.as_deref() {
+            write!(&mut mark, "{}", s).map_err(|e| format!(
+                "Error writing goal mark {:?}: {}", s, &e
+            ))?;
+        }
+
+        let score = maybe_parse_score_str(g.score.as_deref())?;
+
+        let status = if let Some(due) = &g.due {
+            if let Some(done) = &g.done {
+                if done > due {
+                    GoalStatus::Late
+                } else {
+                    GoalStatus::Done
+                }
+            } else if today > due {
+                GoalStatus::Overdue
+            } else {
+                GoalStatus::Yet
+            }
+        } else if let Some(done) = &g.done {
+            GoalStatus::Done
+        } else {
+            GoalStatus::Yet
+        };
+
+        let gd = GoalDisplay {
+            course: crs.title.as_str(),
+            book: crs.book.as_str(),
+            title: chp.title.as_str(),
+            subject: chp.subject.as_deref(),
+            rev: g.review,
+            inc: g.incomplete,
+            due: g.due,
+            done: g.done,
+            tries: g.tries,
+            mark,
+            score,
+            status
+        };
+
+        Ok(gd)
+    }
+}
+
+#[derive(Debug)]
+pub struct SummaryDisplay<'a> {
+    pub label: &'a str,
+    pub value: MiniString<MEDSTORE>,
+}
+
+#[derive(Debug)]
+pub enum RowDisplay<'a> {
+    Goal(GoalDisplay<'a>),
+    Summary(SummaryDisplay<'a>)
+}
+
+#[derive(Debug)]
+pub struct PaceDisplay<'a> {
+    pub uname: &'a str,
+    pub email: &'a str,
+    pub last: &'a str,
+    pub rest: &'a str,
+    pub tuname: &'a str,
+    pub teacher: &'a str,
+    pub temail: &'a str,
+    pub previously_inc: bool,
+    pub semf_inc: bool,
+    pub sems_inc: bool,
+    pub has_review_chapters: bool,
+    pub has_incomplete_chapters: bool,
+    pub weight_due: f32,
+    pub weight_done: f32,
+    pub weight_scheduled: f32,
+    pub n_due: usize,
+    pub n_done: usize,
+    pub n_scheduled: usize,
+
+    pub rows: Vec<RowDisplay<'a>>,
+}
+
+fn generate_summary<'a>(
+    sem: Sem,
+    sem_frac: f32,
+    n_notices: i16,
+    exam_frac: f32,
+    exam_score: Option<&'a str>
+) -> Result<SmallVec<[RowDisplay<'a>; 4]>, String> {
+    log::trace!(
+        "generate_summary( {:?}, {}, {}, {}, {:?}) called.",
+        &sem, &sem_frac, &n_notices, &exam_frac, &exam_score
+    );
+
+    let mut lines: SmallVec<[RowDisplay; 4]> = SmallVec::new();
+
+    let int_score = (sem_frac * 100.0).round() as i32;
+    let label = match sem {
+        Sem::Fall => "Fall Test Average",
+        Sem::Spring => "Spring Test Average",
+    };
+    let mut value: MiniString<MEDSTORE> = MiniString::new();
+    write!(&mut value, "{}", &int_score).map_err(|e| format!(
+        "Error writing score {:?}: {}", &int_score, &e
+    ))?;
+    let line = SummaryDisplay{ label, value };
+    lines.push(RowDisplay::Summary(line));
+
+    if let Some(f) = maybe_parse_score_str(exam_score)? {
+        let int_score = (100.0 * f).round() as i32;
+        let label = "Exam Score";
+        let mut value: MiniString<MEDSTORE> = MiniString::new();
+        write!(&mut value, "{}", &int_score).map_err(|e| format!(
+            "Error writing exam score {:?}: {}", &int_score, &e
+        ))?;
+        let line = SummaryDisplay{ label, value };
+        lines.push(RowDisplay::Summary(line));
+
+        let sem_final = (exam_frac * f) + ((1.0 - exam_frac) * sem_frac);
+        let mut sem_pct = 100.0 * sem_final;
+
+        if n_notices > 0 {
+            let label = "Notices";
+            let mut value: MiniString<MEDSTORE> = MiniString::new();
+            write!(&mut value, "-{}", &n_notices).map_err(|e| format!(
+                "Error writing # notices {:?}: {}", &n_notices, &e
+            ))?;
+            let line = SummaryDisplay{ label, value };
+            lines.push(RowDisplay::Summary(line));
+
+            sem_pct = sem_pct - (n_notices as f32);
+        }
+
+        let int_pct = sem_pct.round() as i32;
+        let label = match sem {
+            Sem::Fall => "Fall Semester Grade",
+            Sem::Spring => "Spring Semester Grade",
+        };
+        let mut value: MiniString<MEDSTORE> = MiniString::new();
+        write!(&mut value, "{}", &int_pct).map_err(|e| format!(
+            "Error writing semester grade {:?}: {}", &int_pct, &e
+        ))?;
+        let line = SummaryDisplay{ label, value };
+        lines.push(RowDisplay::Summary(line));
+    }
+
+    Ok(lines)
+}
+
+impl<'a> PaceDisplay<'a> {
+    pub fn from(p: &'a Pace, glob: &'a Glob) -> Result<PaceDisplay<'a>, String> {
+        log::trace!(
+            "GoalDisplay::from( [ Pace {:?} ], [ Glob ] ) called.",
+            &p.student.base.uname
+        );
+
+        let today = crate::now();
+        let semf_end = match glob.dates.get("end-fall") {
+            Some(d) => d,
+            None => { return Err("Date \"end-fall\" not set by Admin.".to_owned()); }
+        };
+
+        let mut previously_inc = false;
+        let mut has_review_chapters = false;
+        let mut has_incomplete_chapters = false;
+        let mut semf_inc = false;
+        let mut sems_inc = false;
+        let mut weight_due: f32 = 0.0;
+        let mut weight_done: f32 = 0.0;
+        let mut weight_scheduled: f32 = 0.0;
+        let mut semf_done: usize = 0;
+        let mut sems_done: usize = 0;
+        let mut semf_total: f32 = 0.0;
+        let mut sems_total: f32 = 0.0;
+        let mut n_due: usize = 0;
+        let mut n_done: usize = 0;
+        let mut n_scheduled: usize = 0;
+        let mut semf_last_id: Option<i64> = None;
+        let mut sems_last_id: Option<i64> = None;
+
+        for g in p.goals.iter() {
+            if let Some(d) = &g.due {
+                if d < &today {
+                    n_due += 1;
+                    weight_due += g.weight;
+                }
+                if let &None = &g.done {
+                    if d < &semf_end {
+                        semf_inc = true;
+                    } else {
+                        sems_inc = true;
+                    }
+                }
+                n_scheduled += 1;
+                weight_scheduled += g.weight;
+            }
+
+            if let Some(d) = &g.done {
+                let score = maybe_parse_score_str(g.score.as_deref())
+                    .map_err(|e| format!("Error parsing stored score {:?}: {}", &g.score, &e))?
+                    .ok_or_else(|| format!("Goal [id {}] has done date but no score.", &g.id))?;
+                
+                if d < &semf_end {
+                    semf_total += score;
+                    semf_done += 1;
+                    semf_last_id = Some(g.id);
+                } else {
+                    sems_total += score;
+                    sems_done += 1;
+                    sems_last_id = Some(g.id);
+                }
+                
+                n_done += 1;
+                weight_done += g.weight;
+            } else if g.incomplete {
+                previously_inc = true;
+            }
+
+            if g.review { has_review_chapters = true; }
+            if g.incomplete { has_incomplete_chapters = true; }
+        }
+
+        let mut fall_summary: SmallVec<[RowDisplay; 4]> = if let Some(_) = semf_last_id {
+            if semf_done > 0 {
+                let sem_frac = semf_total / (semf_done as f32);
+                generate_summary(
+                    Sem::Fall,
+                    sem_frac,
+                    p.student.fall_notices,
+                    p.student.fall_exam_fraction,
+                    p.student.fall_exam.as_deref()
+                )?
+            } else {
+                SmallVec::new()
+            }
+        } else {
+            SmallVec::new()
+        };
+
+        let mut spring_summary: SmallVec<[RowDisplay; 4]> = if let Some(_) = sems_last_id {
+            if sems_done > 0 {
+                let sem_frac = sems_total / (sems_done as f32);
+                generate_summary(
+                    Sem::Spring,
+                    sem_frac,
+                    p.student.spring_notices,
+                    p.student.spring_exam_fraction,
+                    p.student.spring_exam.as_deref()
+                )?
+            } else {
+                SmallVec::new()
+            }
+        } else {
+            SmallVec::new()
+        };
+
+        let n_sum_rows = fall_summary.len() + spring_summary.len();
+        let mut rows: Vec<RowDisplay> = Vec::with_capacity(p.goals.len() + n_sum_rows);
+
+        for g in p.goals.iter() {
+            let gd = GoalDisplay::from_goal(g, &glob, &today).map_err(|e| format!(
+                "Unable to generate display info from Goal {}: {}", &g.id, &e
+            ))?;
+            rows.push(RowDisplay::Goal(gd));
+            
+            if Some(g.id) == semf_last_id {
+                rows.extend(fall_summary.drain(..));
+            } else if Some(g.id) == sems_last_id {
+                rows.extend(spring_summary.drain(..));
+            }
+        }
+
+        let pd = PaceDisplay {
+            uname: p.student.base.uname.as_str(),
+            email: p.student.base.email.as_str(),
+            last: p.student.last.as_str(),
+            rest: p.student.rest.as_str(),
+            tuname: p.teacher.base.uname.as_str(),
+            teacher: p.teacher.name.as_str(),
+            temail: p.teacher.base.email.as_str(),
+            previously_inc,
+            semf_inc,
+            sems_inc,
+            has_review_chapters,
+            has_incomplete_chapters,
+            weight_due,
+            weight_done,
+            weight_scheduled,
+            n_due,
+            n_done,
+            n_scheduled,
+            rows,
+        };
+
+        Ok(pd)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -569,6 +928,9 @@ mod tests {
     ];
     const STUDENT_FILE: &str = "test/env/students.csv";
     const GOALS_FILE: &str = "test/env/goals.csv";
+    const DATES: &[(&str, &str)] = &[
+        ("end-fall", "2023-01-10"),
+    ];
 
     const CONFIG_FILE: &str = "test/env/config.toml";
 
@@ -613,6 +975,15 @@ mod tests {
         }
         g.refresh_users().await.unwrap();
         g.upload_students(&student_csv).await.unwrap();
+
+        {
+            let data_handle = g.data();
+            let data = data_handle.read().await;
+            for (date_name, date_val) in DATES.iter() {
+                data.set_date(date_name, &Date::parse(date_val, DATE_FMT).unwrap()).await.unwrap();
+            }
+        }
+        g.refresh_dates().await.unwrap();
 
         g.refresh_courses().await.unwrap();
         g.refresh_users().await.unwrap();
@@ -669,7 +1040,7 @@ mod tests {
             &g
         ).unwrap();
         log::info!(
-            "Read {} courses from test course file {:?}.",
+            "Read {} Goals from test Goal file {:?}.",
             &goals.len(), GOALS_FILE
         );
 
@@ -680,31 +1051,27 @@ mod tests {
         teardown_env(g).await.unwrap();
     }
 
-/*     #[tokio::test]
+    #[tokio::test]
     #[serial]
-    async fn make_pace_serialized() {
-        use std::io::Write;
-        use serde_json::to_writer_pretty;
-
-        let glob = init_env().await.unwrap();
+    async fn show_pace_display() {
+        let g = init_env().await.unwrap();
         let paces = Pace::from_csv(
             File::open(GOALS_FILE).unwrap(),
-            &glob
+            &g
         ).unwrap();
+        log::info!(
+            "Read {} Paces from test Goal file {:?}.",
+            &paces.len(), GOALS_FILE
+        );
+        for p in paces.iter() {
+            g.insert_goals(&p.goals).await.unwrap();
+        }
 
-        let p = paces.pop().unwrap();
+        let p = g.get_pace_by_student("dval").await.unwrap();
+        println!("{:#?}", &p);
+        let p_disp = PaceDisplay::from(&p, &g).unwrap();
+        println!("\n{:#?}\n", &p_disp);
 
-        println!("Debug:\n{:#?}\n", &p);
-
-        let mut buff: Vec<u8> = Vec::new();
-        buff.extend_from_slice(b"serde_json:\n");
-        to_writer_pretty(&mut buff, &p).unwrap();
-        buff.push(b'\n');
-        let buff = String::from_utf8(buff).unwrap();
-
-        println!("{}", &buff);
-
-        teardown_env(glob).await.unwrap();
-
-    } */
+        teardown_env(g).await.unwrap();
+    }
 }

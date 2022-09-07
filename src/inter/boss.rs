@@ -19,7 +19,11 @@ use tokio::sync::RwLock;
 use crate::{
     auth, auth::AuthResult,
     config::Glob,
-    pace::{Goal, maybe_parse_score_str, Pace, Source},
+    pace::{
+        Goal, GoalDisplay, GoalStatus,
+        maybe_parse_score_str,
+        Pace, PaceDisplay, RowDisplay, Source, SummaryDisplay,
+    },
     user::{BaseUser, User, Student},
 };
 use super::*;
@@ -128,6 +132,18 @@ fn write_cal_table<W: Write>(
     mut buff: W
 ) -> Result<(), String> {
     log::trace!("make_cal_table( [ {:?} Pace], [ Glob ] ) called.", &p.student.base.uname);
+
+    let pd = PaceDisplay::from(p, glob).map_err(|e| format!(
+        "Error generating PaceDisplay for {:?}: {}\npace data: {:?}",
+        &p.student.uname, &e, &p
+    ))?;
+
+    //
+    //
+    // U R HERE
+    //
+    //
+
 
     let semf_end = match glob.dates.get("end-fall") {
         Some(d) => d,

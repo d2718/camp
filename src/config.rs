@@ -396,9 +396,8 @@ impl<'a> Glob {
         log::trace!("Inserted {} Students into store.", &n_studs);
 
         let passwords: Vec<String> = students.iter().map(|_| self.random_password(32)).collect();
-        let mut pword_refs: Vec<&str> = passwords.iter().map(|s| s.as_str()).collect();
+        let pword_refs: Vec<&str> = passwords.iter().map(|s| s.as_str()).collect();
         let mut uname_refs: Vec<&str> = Vec::with_capacity(students.len());
-        let mut pword_refs: Vec<&str> = Vec::with_capacity(students.len());
         let mut salt_refs:  Vec<&str> = Vec::with_capacity(students.len());
         for s in students.iter() {
             uname_refs.push(&s.base.uname);
@@ -645,7 +644,9 @@ impl<'a> Glob {
 
         t.execute("DELETE FROM chapters WHERE id = $1", &[&id]).await?;
 
-        t.commit().await.map_err(|e| format!("Error commiting transaction to delete Chapter w/id {}", &id))?;
+        t.commit().await.map_err(|e| format!(
+            "Error commiting transaction to delete Chapter w/id {}: {}", &id, &e
+        ))?;
 
         Ok(())
     }
@@ -879,8 +880,8 @@ impl<'a> Glob {
         t.commit().await?;
 
         auth_t.commit().await.map_err(|e| format!(
-            "Error removing tranche of {} users from the Auth DB; Auth and Data DBs may be out of synch. The database may need manual attention from someone who understands databases. In any case, it is recommended to log back in before you continue.",
-            uname_refs.len()
+            "Error removing tranche of {} users from the Auth DB ({}); Auth and Data DBs may be out of synch. The database may need manual attention from someone who understands databases. In any case, it is recommended to log back in before you continue.",
+            &uname_refs.len(), &e
         ).into())
     }
 }
