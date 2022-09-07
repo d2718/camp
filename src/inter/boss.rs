@@ -19,6 +19,7 @@ use tokio::sync::RwLock;
 use crate::{
     auth, auth::AuthResult,
     config::Glob,
+    MiniString,
     pace::{
         Goal, GoalDisplay, GoalStatus,
         maybe_parse_score_str,
@@ -106,9 +107,63 @@ struct GoalData<'a> {
     chapter: &'a str,
     review: &'a str,
     incomplete: &'a str,
-    due: SmallString<SMALLSTORE>,
-    done: SmallString<SMALLSTORE>,
-    score: SmallString<SMALLSTORE>,
+    due: MiniString<SMALLSTORE>,
+    done: MiniString<SMALLSTORE>,
+    score: MiniString<SMALLSTORE>,
+}
+
+fn write_cal_goal<W: Write>(
+    g: &GoalDisplay,
+    glob: &Glob,
+    mut buff: W
+) -> Result<(), String> {
+
+    let row_class = match g.status {
+        GoalStatus::Done => "done",
+        GoalStatus::Late => "late",
+        GoalStatus::Overdue => "overdue",
+        GoalStatus::Yet => "yet",
+    };
+
+    let row_bad = if g.inc && g.done.is_none() {
+        " bad"
+    } else {
+        ""
+    };
+
+    let review = if g.rev { " R " } else { "" };
+    let incomplete = if g.inc { " I " } else { "" };
+
+    let mut due: MiniString<SMALLSTORE> = MiniString::new();
+    if let Some(d) = g.due {
+        d.format_into(&mut due, DATE_FMT).map_err(|e| format!(
+            "Error writing due date {:?}: {}", &d, &e
+        ))?;
+    }
+
+    let mut done: MiniString<SMALLSTORE> = MiniString::new();
+    if let Some(d) = g.done {
+        d.format_into(&mut done, DATE_FMT).map_err(|e| format!(
+            "Error writing done date {:?}: {}", &d, &e
+        ))?;
+    }
+
+    let mut score: MiniString<SMALLSTORE> = MiniString::new();
+    if let Some(f) = g.score {
+        let pct = (100.0 * f).round() as i32;
+        write!(&mut score, "{} %", &pct).map_err(|e| format!(
+            "Error writing score {:?}: {}", &pct, &e
+        ))?;
+    }
+
+    let data = GoalData {
+        row_class, row_bad, review, incomplete, due, done, score,
+        course: g.course,
+        book: g.book,
+        chapter: g.title,
+    };
+
+    write_raw_template("boss_goal_row", &data, buff)
 }
 
 #[derive(Serialize)]
@@ -128,24 +183,60 @@ struct PaceData<'a> {
 fn write_cal_table<W: Write>(
     p: &Pace,
     glob: &Glob,
-    today: &Date,
     mut buff: W
 ) -> Result<(), String> {
     log::trace!("make_cal_table( [ {:?} Pace], [ Glob ] ) called.", &p.student.base.uname);
 
     let pd = PaceDisplay::from(p, glob).map_err(|e| format!(
         "Error generating PaceDisplay for {:?}: {}\npace data: {:?}",
-        &p.student.uname, &e, &p
+        &p.student.base.uname, &e, &p
     ))?;
 
-    //
-    //
-    // U R HERE
-    //
-    //
+    let mut table_class: SmallString<MEDSTORE> = SmallString::from_str("cal");
+    if pd.previously_inc {
+        write!(&mut table_class, " inc").map_err(|e| format!("Error writing table class: {}", &e))?;
+    }
+    if pd.weight_done < pd.weight_due {
+        write!(&mut table_class, " lag").map_err(|e| format!("Error writing table class: {}", &e))?;
+    }
+    if pd.n_done < pd.n_due {
+        write!(&mut table_class, " count").map_err(|e| format!("Error writing table class: {}", &e))?;
+    }
 
+    let name = format!("{}, {}", pd.last, pd.rest);
 
-    let semf_end = match glob.dates.get("end-fall") {
+    let lag = if pd.weight_scheduled.abs() < 0.001 {
+        0
+    } else {
+        (100.0 * (pd.weight_done - pd.weight_due) / pd.weight_scheduled) as i32
+    };
+    let mut lagstr: SmallString<SMALLSTORE> = SmallString::new();
+    write!(&mut lagstr, "{:+}%", &lag).map_err(|e| format!("Error writing lag string: {}", &e))?;
+
+    let mut rows: Vec<u8> = Vec::new();
+    for row in pd.rows.iter() {
+        if let RowDisplay::Goal(g) = row {
+            write_cal_goal(&g, glob, &mut rows).map_err(|e| format!(
+                "Error writing cal for {:?}: {}", &p.student.base.uname, &e
+            ))?;
+        }
+    }
+    let rows = String::from_utf8(rows).map_err(|e| format!(
+        "Calendar rows for {:?} not UTF-8 for some reason: {}", &p.student.base.uname, &e
+    ))?;
+
+    let data = PaceData {
+        table_class, name, lag, lagstr, rows,
+        uname: pd.uname,
+        tuname: pd.tuname,
+        teacher: pd.teacher,
+        n_done: pd.n_done,
+        n_due: pd.n_due
+    };
+
+    write_raw_template("boss_pace_table", &data, &mut buff)
+
+/*     let semf_end = match glob.dates.get("end-fall") {
         Some(d) => d,
         None => { return Err("Special date \"end-fall\" not set by Admin.".to_owned()); },
     };
@@ -245,27 +336,6 @@ fn write_cal_table<W: Write>(
             ))?;
         }
 
-/*         let due = SmallString::from_buf(
-            due.into_inner().map_err(|e| format!(
-                "Unable to handle due date {:?}.", &e
-            ))?
-        ).map_err(|e| format!(
-            "Unable to correctly format due date: {}", &e
-        ))?;
-        let done = SmallString::from_buf(
-            done.into_inner().map_err(|e| format!(
-                "Unable to handle done date {:?}.", &e
-            ))?
-        ).map_err(|e| format!(
-            "Unable to correctly format done date: {}", &e
-        ))?;
-        let score = SmallString::from_buf(
-            score.into_inner().map_err(|e| format!(
-                "Unable to handle score {:?}.", &e
-            ))?
-        ).map_err(|e| format!(
-            "Unable to correctly format score: {}", &e
-        ))?; */
         let due = unwrap_string_vector(due);
         let done = unwrap_string_vector(done);
         let score = unwrap_string_vector(score);
@@ -338,7 +408,7 @@ fn write_cal_table<W: Write>(
         n_done, n_due, lag, lagstr, rows
     };
 
-    write_raw_template("boss_pace_table", &data, &mut buff)
+    write_raw_template("boss_pace_table", &data, &mut buff) */
 }
 
 pub async fn make_boss_calendars(
@@ -381,12 +451,11 @@ pub async fn make_boss_calendars(
         }
     }
 
-    let today = crate::now();
     let mut buff: Vec<u8> = Vec::new();
 
     for p in paces.iter() {
         if let Err(e) = write_cal_table(
-            p, &glob, &today, &mut buff
+            p, &glob, &mut buff
         ) {
             return Err(format!(
                 "Error generating list of pace calendars: {}", &e
