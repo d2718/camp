@@ -687,7 +687,8 @@ fn generate_summary<'a>(
     sem_frac: f32,
     n_notices: i16,
     exam_frac: f32,
-    exam_score: Option<&'a str>
+    exam_score: Option<&'a str>,
+    sem_inc: bool
 ) -> Result<SmallVec<[RowDisplay<'a>; 4]>, String> {
     log::trace!(
         "generate_summary( {:?}, {}, {}, {}, {:?}) called.",
@@ -742,6 +743,11 @@ fn generate_summary<'a>(
         write!(&mut value, "{}", &int_pct).map_err(|e| format!(
             "Error writing semester grade {:?}: {}", &int_pct, &e
         ))?;
+        if sem_inc {
+            write!(&mut value, " (I)").map_err(|e| format!(
+                "Error writing semester grade: {}", &e
+            ))?;
+        }
         let line = SummaryDisplay{ label, value };
         lines.push(RowDisplay::Summary(line));
     }
@@ -830,7 +836,8 @@ impl<'a> PaceDisplay<'a> {
                     sem_frac,
                     p.student.fall_notices,
                     p.student.fall_exam_fraction,
-                    p.student.fall_exam.as_deref()
+                    p.student.fall_exam.as_deref(),
+                    semf_inc
                 )?
             } else {
                 SmallVec::new()
@@ -847,7 +854,8 @@ impl<'a> PaceDisplay<'a> {
                     sem_frac,
                     p.student.spring_notices,
                     p.student.spring_exam_fraction,
-                    p.student.spring_exam.as_deref()
+                    p.student.spring_exam.as_deref(),
+                    sems_inc
                 )?
             } else {
                 SmallVec::new()

@@ -69,9 +69,9 @@ fn write_goal(
 
     let ri = match (g.rev, g.inc) {
         (false, false) => "",
-        (true, false) => "R*",
-        (false, true) => "I*",
-        (true, true) => "R* I*",
+        (true, false) => " R*",
+        (false, true) => " I*",
+        (true, true) => " R* I*",
     };
 
     let mut due: MiniString<SMALLSTORE> = MiniString::new();
@@ -240,12 +240,12 @@ pub async fn login(
     };
 
     let rev_foot = if pd.has_review_chapters {
-        "*R indicates previously-completed material that requires review."
+        "*R after a chapter indicates previously-completed material that requires review."
     } else {
         ""
     };
     let inc_foot = if pd.has_incomplete_chapters {
-        "*I indicates material incomplete from a prior acadmic year."
+        "*I after a chapter indicates material incomplete from a prior acadmic year."
     } else {
         ""
     };
