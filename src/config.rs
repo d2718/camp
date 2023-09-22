@@ -1342,6 +1342,8 @@ impl<'a> Glob {
         ).map_err(|e| format!(
             "Error clearing yearly data from database: {}", &e
         ))?;
+
+        t.commit().await?;
     
         Ok(())
     }

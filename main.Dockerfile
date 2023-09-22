@@ -14,6 +14,6 @@ COPY templates/ ./templates
 
 COPY deploy/config.toml .
 
-ENV LOG_LEVEL=info
+ENV LOG_LEVEL=max
 
 CMD ["./camp"]
